@@ -65,25 +65,28 @@ Use `scripts/preflight_learning_site.py` before implementation. Use `scripts/aud
 
 1. **Extract and inventory the source**
    - Run `scripts/preflight_learning_site.py` and decide the extraction, image-generation, browser-check, and deployment routes from real tool availability.
-   - Extract text into paragraphs with section labels.
+   - Extract text into paragraphs with section labels, stable `source_id`s, source page/section, source order, and a text hash or normalized snippet for verification.
    - Extract or crop all paper figures/tables into image assets, splitting large composite figures into meaningful subfigures when that improves comprehension.
-   - Build a manifest: sections, expected paragraph count, rendered paragraph count, terms, claims, figures/tables, equations, generated visuals, tools used, and evidence.
+   - Build a manifest: sections, expected paragraph count, rendered paragraph count, per-block coverage, terms, inline anchors, claims, figures/tables, equations, generated visuals, tools used, and evidence.
 
 2. **Design the learning path**
    - Convert paper sections into a map or chapter navigation.
    - For each chapter, write a short "why this chapter matters" note, a logic summary, and 3-5 learning checkpoints.
    - Decide where each term, generated diagram, source figure/table, and side note belongs in the reading flow.
+   - Design from novice reader behavior: preserve the original, scaffold how to read it, teach prerequisite concepts at the moment of need, then ask the reader to inspect evidence before accepting a conclusion.
    - Sketch the first viewport before coding: title, language mode, chapter map, bilingual reading block, and synchronized side note must all be visible or one click away.
 
 3. **Write explanation layers**
    - Keep every main-text source paragraph paired with Chinese translation or explanation according to source language.
    - For non-Chinese sources, make the default reading card a two-column or clearly paired `Original paragraph / Chinese reading` block. Do not provide only selected excerpts plus a collapsed raw-source dump.
-   - Add a concise plain-language explanation after each meaningful paragraph or paragraph group.
+   - Add a plain-language explanation after each meaningful paragraph or paragraph group. Long or concept-dense original passages need proportional Chinese explanation, not a one-sentence gloss.
    - Mark key terms inline inside the original/translation/explanation text with underlines/buttons that open a term popover or side drawer. The trigger text must remain readable as part of the sentence.
+   - Keep any bottom/side glossary as a secondary index only. It must never be the only place where a term is clickable.
    - For hard methods, experiments, and metrics, explain the general concept first, then explain the paper-specific use.
 
 4. **Create visuals**
    - Use source screenshots for original figures/tables, but never screenshot blocks of text that should be selectable HTML text.
+   - For every source figure/table, place it next to the argument it supports and explain it individually. Do not rely on one global "figure drawer" explanation for multiple charts.
    - Use Image 2 diagrams for conceptual understanding: workflows, metaphors, system maps, experiment setup, training loops, comparison summaries, and "what the author is doing next" transitions.
    - If Image 2 is unavailable, stop and tell the user before substituting SVG/manual diagrams. Do not silently downgrade.
    - Generated images may include short labels and a few concise explanatory callouts when that improves comprehension; keep long definitions, bilingual paragraphs, and precise evidence explanations in HTML.
@@ -93,13 +96,14 @@ Use `scripts/preflight_learning_site.py` before implementation. Use `scripts/aud
    - Prefer a static HTML/CSS/JS package unless the user asks for a framework or the project already has one.
    - Use a chapter-switching reader with a left learning panel and right bilingual source reader when appropriate.
    - Provide expandable and closable bubbles, drawers, cards, or panels for terms, notes, figures, and logic summaries.
+   - Use reader-facing UI labels only. Replace production labels such as "generated asset" with learning labels such as "机制图解", "证据读法", or "概念地图".
    - Set the page title and deployment name to `Learn <paper short title>` or the best concise paper-specific name.
 
 6. **Validate**
    - Run the site locally or open the HTML directly, depending on the build.
    - Use browser screenshots across desktop and mobile when possible; check that no text overlaps and all popovers/drawers can close.
    - Run `scripts/audit_learning_site.py <site-dir-or-html> --strict`.
-   - Perform three review passes: design/interaction, teaching comprehension, and bilingual/source/figure coverage.
+   - Perform at least three review passes: design/interaction, teaching comprehension, and bilingual/source/figure coverage. For each pass, record concrete fixes made or concrete reasons no fix was needed.
    - Fix issues before final delivery.
 
 7. **Deploy only after confirming**

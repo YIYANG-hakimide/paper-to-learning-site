@@ -108,6 +108,7 @@ def main() -> int:
         "pdf_text": checks["pdftotext"]["ok"] or checks["python_pdfplumber"]["ok"] or checks["python_pypdf"]["ok"],
         "pdf_figures": checks["pdftoppm"]["ok"] or checks["python_pillow"]["ok"],
         "image_processing": checks["python_pillow"]["ok"] or checks["sips"]["ok"] or checks["imagemagick"]["ok"],
+        "image_generation": "manual_check_required",
         "browser_qa": checks["node_playwright"]["ok"] or checks["chrome_headless"]["ok"],
         "github_publish": checks["git"]["ok"] and checks["gh"]["ok"],
         "vercel_deploy": checks["vercel"]["ok"],
@@ -128,6 +129,9 @@ def main() -> int:
             "python": recommended_python,
             "node": command_path("node"),
             "chrome": chrome_path(),
+        },
+        "manual_checks": {
+            "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams."
         },
         "blockers": blockers,
     }

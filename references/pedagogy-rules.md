@@ -16,6 +16,8 @@ For each hard concept, write in this order:
 
 Never explain only "what the paper says" when the reader first needs the concept itself.
 
+For foundational terms such as supervised fine-tuning, rejection sampling, attention, ablation, BLEU, p-value, likelihood, encoder, or simulation, assume the reader has never learned the term. Start with the field meaning before the paper-specific meaning.
+
 ## Paragraph treatment
 
 For each paragraph or small paragraph group:
@@ -27,6 +29,16 @@ For each paragraph or small paragraph group:
 - add inline term triggers for concepts that would block understanding
 
 Avoid a tiny Chinese summary after a large English passage. Long source passages need proportional explanation.
+
+For dense paragraphs, unpack the paragraph's moving parts:
+
+- what the sentence is trying to establish
+- what variables, components, or actors are involved
+- what step happens first, second, and next
+- what conclusion follows
+- what a novice might confuse
+
+If a source paragraph is long or contains formulas, experimental claims, or several technical nouns, one generic Chinese sentence is not enough.
 
 ## Inline terms
 
@@ -69,6 +81,8 @@ For each important conclusion, answer:
 - How large or meaningful is the change?
 - What can we conclude?
 - What can we not conclude?
+
+When a conclusion uses words like "improves", "better", "training", "simulation", or "learned", name the object precisely. Explain whether the paper means a model's score improved, an agent's behavior changed, a simulated world produced data, a training dataset was constructed, or a human-facing evaluation changed.
 
 ## Tone
 

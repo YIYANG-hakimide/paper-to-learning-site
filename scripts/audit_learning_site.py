@@ -37,9 +37,6 @@ class SiteHTMLParser(HTMLParser):
         "source-text",
         "translation-text",
         "plain-text",
-        "reading-block",
-        "paragraph",
-        "paragraph-body",
         "source-paragraph",
     }
     DETACHED_TERM_CLASSES = {
@@ -71,8 +68,10 @@ class SiteHTMLParser(HTMLParser):
         self.starttags: list[tuple[str, dict[str, str], int]] = []
         self.class_counts: dict[str, int] = {}
         self.visible_text_parts: list[str] = []
+        self.attr_texts: list[tuple[str, str, int]] = []
         self.class_texts: dict[str, list[str]] = {}
         self.term_records: list[dict[str, object]] = []
+        self.reading_blocks: list[dict[str, str | int]] = []
         self.aria_counts = {"expanded": 0, "controls": 0, "current": 0}
         self._current_button: dict[str, str] | None = None
         self._button_text: list[str] = []
@@ -98,12 +97,24 @@ class SiteHTMLParser(HTMLParser):
         for aria_name in ("aria-expanded", "aria-controls", "aria-current"):
             if aria_name in attr:
                 self.aria_counts[aria_name.removeprefix("aria-")] += 1
+        for attr_name in ("alt", "title", "aria-label"):
+            if attr.get(attr_name, "").strip():
+                self.attr_texts.append((attr_name, attr[attr_name].strip(), self._line))
         if "id" in attr:
             self.ids.append(attr["id"])
         if tag == "img":
             self.images.append((attr.get("src", ""), attr.get("alt", ""), self._line))
         if tag == "iframe":
             self.iframes.append((attr.get("src", ""), self._line))
+        if "reading-block" in classes:
+            self.reading_blocks.append(
+                {
+                    "line": self._line,
+                    "id": attr.get("id", ""),
+                    "data_source_id": attr.get("data-source-id", ""),
+                    "data_block": attr.get("data-block", ""),
+                }
+            )
         is_term = (
             "term" in classes
             or "data-term" in attr
@@ -346,7 +357,9 @@ PRODUCTION_TEXT_PATTERNS = [
     (r"生成教学图用于", "generated asset purpose note"),
     (r"这张生成", "generated-image production phrasing"),
     (r"Generated explainer", "generated explainer label"),
+    (r"\bGenerated\b", "generated production label"),
     (r"generated assets?", "generated asset label"),
+    (r"\bprompt\b", "prompt/internal generation label"),
     (r"\bmanifest\b", "manifest/internal file label"),
     (r"\bpreflight\b", "preflight/internal workflow label"),
     (r"\bregression(?: slice)?\b", "regression/internal test label"),
@@ -395,10 +408,12 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
     source_count = parser.class_counts.get("source-label", 0)
     translation_count = parser.class_counts.get("translation-label", 0)
     plain_count = parser.class_counts.get("plain-label", 0)
-    term_count = parser.class_counts.get("term", 0)
+    term_count = max(parser.class_counts.get("term", 0), len(parser.term_records))
     inline_term_count = sum(1 for item in parser.term_records if item.get("inline"))
     detached_term_count = sum(1 for item in parser.term_records if item.get("detached"))
     visible_text = parser.visible_text
+    public_attr_text = " ".join(value for _name, value, _line in parser.attr_texts)
+    public_text_for_scan = f"{visible_text} {public_attr_text}"
     source_texts = parser.class_texts.get("source-text", [])
     translation_texts = parser.class_texts.get("translation-text", [])
     plain_texts = parser.class_texts.get("plain-text", [])
@@ -510,10 +525,36 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
 
     if strict:
         for pattern, label in PRODUCTION_TEXT_PATTERNS:
-            if re.search(pattern, visible_text, re.I):
+            if re.search(pattern, public_text_for_scan, re.I):
                 errors.append(f"{path}: public UI exposes internal production text ({label}); rewrite as reader-facing learning copy")
+        for attr_name, value, line in parser.attr_texts:
+            for pattern, label in PRODUCTION_TEXT_PATTERNS:
+                if re.search(pattern, value, re.I):
+                    errors.append(f"{path}:{line}: public {attr_name} exposes internal production text ({label})")
         if marginalia_text and re.search(r"资产|生成教学图|manifest|preflight|regression|generated assets?", marginalia_text, re.I):
             errors.append(f"{path}: marginalia/side notes expose production or asset-management language")
+        missing_source_ids = [
+            str(item.get("data_block") or item.get("id") or item.get("line"))
+            for item in parser.reading_blocks
+            if not item.get("data_source_id")
+        ]
+        if parser.reading_blocks and missing_source_ids:
+            errors.append(
+                f"{path}: reading blocks need stable data-source-id values; missing on {len(missing_source_ids)}/{len(parser.reading_blocks)} blocks"
+            )
+        if parser.reading_blocks and (source_count < len(parser.reading_blocks) or plain_count < len(parser.reading_blocks)):
+            errors.append(
+                f"{path}: every reading-block should include source and plain-language layers ({len(parser.reading_blocks)} blocks, {source_count} source labels, {plain_count} plain labels)"
+            )
+        if source_count and translation_count and plain_count and not (source_count == translation_count == plain_count):
+            errors.append(
+                f"{path}: source/translation/plain block counts should match ({source_count}/{translation_count}/{plain_count})"
+            )
+        if term_count:
+            required_ladder = ["术语本义", "说人话", "本文指代", "作者怎么用", "常见误解"]
+            missing_ladder = [label for label in required_ladder if label not in text]
+            if missing_ladder:
+                errors.append(f"{path}: term explanations should include full explanation ladder; missing labels: {', '.join(missing_ladder)}")
         generic_action_counts: dict[str, int] = {}
         for attrs, _line in parser.buttons:
             label = attrs.get("aria-label", "").strip() or attrs.get("title", "").strip() or attrs.get("_text", "").strip()
@@ -556,6 +597,7 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
         chapter_coverage = manifest.get("chapter_coverage")
         term_anchors = manifest.get("term_anchors")
         generated_visuals = manifest.get("generated_visuals")
+        paper_figures_manifest = manifest.get("paper_figures")
         generated_visual_language = str(manifest.get("generated_visual_language", "")).lower()
         if isinstance(expected_source, int) and rendered_source < expected_source:
             errors.append(f"{path}: manifest says only {rendered_source}/{expected_source} source paragraphs rendered")
@@ -603,8 +645,14 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
                 for index, item in enumerate(generated_visuals, start=1):
                     if not isinstance(item, dict):
                         continue
+                    if not (item.get("model_name") or item.get("tool") or image_model):
+                        errors.append(f"{path}: generated visual #{index} must record model_name/tool")
+                    if not item.get("linked_source_ids") and not item.get("linked_claim_ids"):
+                        errors.append(f"{path}: generated visual #{index} should link to source paragraphs or claims")
                     language = str(item.get("in_image_text_language", item.get("prompt_language", ""))).lower()
                     ratio = item.get("chinese_label_ratio")
+                    if is_chinese_bilingual and not language:
+                        errors.append(f"{path}: generated visual #{index} must record in_image_text_language or prompt_language")
                     if is_chinese_bilingual and language and language not in {"zh", "zh-dominant", "chinese", "chinese-dominant", "mixed"}:
                         errors.append(f"{path}: generated visual #{index} records non-Chinese-dominant in-image language: {language}")
                     if is_chinese_bilingual and isinstance(ratio, (int, float)) and ratio < 0.6:
@@ -615,8 +663,22 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
                         errors.append(f"{path}: generated visual #{index} uses factual values without source_refs_for_values")
             elif strict and isinstance(rendered_visuals, int) and rendered_visuals > 0:
                 warnings.append(f"{path}: manifest should include generated_visuals[] entries with language and source-link metadata")
+            if isinstance(paper_figures_manifest, list):
+                for index, item in enumerate(paper_figures_manifest, start=1):
+                    if not isinstance(item, dict):
+                        continue
+                    if not (item.get("primary_rendered_block_id") or item.get("primary_source_id") or item.get("linked_source_ids")):
+                        errors.append(f"{path}: paper figure/table #{index} needs a primary in-flow reading position linked to source ids")
+                    cues = item.get("explanation_cues_present")
+                    if isinstance(cues, list):
+                        required = {"它是什么", "怎么看", "结论是什么", "不能推出什么"}
+                        missing = sorted(required - {str(cue) for cue in cues})
+                        if missing:
+                            errors.append(f"{path}: paper figure/table #{index} manifest explanation cues missing: {', '.join(missing)}")
+            elif isinstance(expected_figures, int) and expected_figures > 0:
+                errors.append(f"{path}: manifest needs paper_figures[] with primary placement and per-figure explanation metadata")
     elif strict:
-        warnings.append(f"{path}: no learning-site manifest found; add data/learning-site-manifest.json for exact coverage checks")
+        errors.append(f"{path}: no learning-site manifest found; add data/learning-site-manifest.json for exact coverage checks")
 
     if strict:
         render_errors, render_warnings = run_mobile_render_check(path, root)

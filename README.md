@@ -19,6 +19,7 @@
 - 关键术语跟随正文出现，点击即可展开解释。
 - 图表和实验结果放在对应论证位置，而不是堆在页面最后。
 - 每个难点尽量配 Image 2 生成的解释图、流程图、示意图或类比图。
+- 每个正文阅读块都尽量有可追溯的段落锚点，方便术语、旁注、图表和原文互相回跳。
 - 默认面向“没有专业背景的大学生”，从基础概念讲起。
 
 ## 它适合什么场景
@@ -140,8 +141,13 @@ python3 ~/.codex/skills/paper-to-learning-site/scripts/audit_learning_site.py <s
 - 是否缺少中英 / 中文 / EN only 这类语言模式
 - 是否用 SVG 小框图替代 Image 2 生成图
 - 是否缺少 `data/learning-site-manifest.json`
+- 是否把“面向无专业背景大学生”“Generated”“生成教学图资产”“preflight”“manifest”等制作过程文案暴露给读者
+- 术语是否只出现在段后标签，而没有嵌在原文/译文/解释的具体词位上
+- 阅读块是否缺少稳定 `data-source-id`
+- 图表按钮是否都是“打开图表抽屉”这类无法理解的重复泛称
+- 生成图是否记录中文主导、Image 2/图像模型来源和对应段落
 
-这个脚本不是完整 QA，但能提前抓住一些很容易破坏阅读体验的问题。
+这个脚本不是完整 QA，但会把“看起来内容很多、实际不帮助阅读”的常见坏味道提前拦下来。
 
 ## 维护与更新
 
@@ -269,7 +275,7 @@ Run:
 python3 ~/.codex/skills/paper-to-learning-site/scripts/audit_learning_site.py <site-dir-or-index.html> --strict
 ```
 
-The scripts check tool availability, missing local image assets, duplicate IDs, weak image alt text, PDF iframe patterns, buried raw source text, missing language modes, SVG-only generated diagrams, and missing coverage manifests.
+The scripts check tool availability, missing local image assets, duplicate IDs, weak image alt text, PDF iframe patterns, buried raw source text, missing language modes, SVG-only generated diagrams, and missing coverage manifests. Strict mode also flags public production copy such as `Generated`, `prompt`, `preflight`, or `manifest`, detached-only term chips, missing `data-source-id` anchors, repeated vague action labels, and generated visuals that lack language/source provenance.
 
 ## Status
 

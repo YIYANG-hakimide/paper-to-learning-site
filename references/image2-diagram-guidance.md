@@ -36,6 +36,7 @@ For generated visuals, specify:
 - for Chinese-bilingual sites, use Chinese as the dominant in-image language; include English only as short aliases for canonical terms when helpful
 - allow short in-image labels and 1-3 concise explanatory callouts when they make the diagram easier to read
 - avoid long paragraphs, dense bilingual text, citations, or exact table values baked into the image
+- avoid factual scores, rankings, percentages, or improvement claims inside the image unless those values are sourced and also explained in nearby HTML
 - leave clean areas for HTML labels or expanded explanations when needed
 - output should be legible at web card size
 - produce bitmap assets (`.png`, `.jpg`, or `.webp`) unless the image tool returns another real generated-image format
@@ -61,6 +62,8 @@ Small amounts of text inside generated images are useful for orientation. The ru
 
 Do not prompt Chinese-bilingual explainer images with English-only labels such as "Sequential bottleneck" or "Parallel training" unless the user explicitly wants English-only visuals. Prefer `顺序瓶颈 / sequential bottleneck` or just `顺序瓶颈` when the concept is explained nearby in HTML.
 
+Do not create a public section titled like "生成教学图资产" or "Generated assets". Generated images should appear in the chapter where they teach something, with reader-facing labels such as "机制图解", "流程图", "证据地图", or "概念类比".
+
 ## Provenance
 
 Record generated visuals in `data/learning-site-manifest.json`:
@@ -70,5 +73,9 @@ Record generated visuals in `data/learning-site-manifest.json`:
 - chapter/section
 - teaching purpose
 - prompt summary
+- prompt language
+- in-image text language
+- linked source ids or claim ids
+- factual values used and their source refs, if any
 
 If the asset was manually drawn SVG, mark it as `manual-svg-fallback` and do not count it as an Image 2 generated visual.

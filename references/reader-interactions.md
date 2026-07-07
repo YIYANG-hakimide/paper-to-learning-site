@@ -21,11 +21,13 @@ Recommended layout:
 - Keep terminology and figures close to the paragraph where they matter.
 - Terms must be anchored to the exact words they explain. Do not rely on detached tag strips or glossary chips as the only interaction.
 - Each paragraph should have a stable anchor so side notes, figure drawers, and popovers can point back to the source sentence.
+- Each reading block should expose a stable `data-source-id` that matches the manifest.
 - Side panels should track the active paragraph and expose "回到原文" or equivalent anchors for notes, figures, and claims.
 - Use semantic highlight colors consistently, for example: method terms, evidence, limitations, and definitions should not share arbitrary colors.
 - Let users expand deeper explanations without forcing every detail into the main line.
 - Preserve reading flow: the main text should still make sense if all drawers are closed.
 - Do not make the reader open an appendix or raw extraction panel to access the paper's real text.
+- Do not make a chapter map that only jumps to repeated summaries. Chapter switching should reveal that chapter's original/translation/explanation blocks.
 
 ## Visual design
 
@@ -43,6 +45,7 @@ Avoid:
 - end-loaded figure galleries disconnected from the argument
 - text baked into screenshots when it should be selectable HTML
 - detached "related terms" rows that force the reader to guess which sentence the term belongs to
+- a term popover triggered only from a glossary chip when the term appears unclickable in the paragraph
 - visible internal workflow labels such as manifest, preflight, regression, generated asset, reader level, or target audience notes
 
 ## Responsive and accessibility checks

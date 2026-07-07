@@ -9,6 +9,8 @@ Use these user-centered constraints when designing a paper learning site. The ta
 - Students can become frustrated when they cannot connect a paper to the bigger picture or when jargon blocks progress. Source: JMBE scaffolded module (https://journals.asm.org/doi/10.1128/jmbe.00177-22).
 - Annotated primary literature helps by overlaying explanations on the original text, without rewriting the text away. Source: The Node / Science in the Classroom summary (https://thenode.biologists.com/introducing-introductory-biology-students-to-primary-scientific-literature-why-it-matters/education/).
 - Figures are a major comprehension bottleneck. Treat figures and tables as evidence to be read, not decoration or appendix material.
+- Novices often read linearly and accept the author's conclusion before inspecting methods or data. The site should slow them down at evidence points with "先看表怎么读" interactions.
+- Novices also confuse layers: simulated environment versus generated dataset, data collection versus model training, training improvement versus evaluation improvement. Separate these layers visually and verbally.
 
 ## Design Responses
 
@@ -19,6 +21,15 @@ Use these user-centered constraints when designing a paper learning site. The ta
 - Use "details on demand": keep the main line readable, but let readers open deeper definitions, examples, figure walkthroughs, and formula intuition in place.
 - For experiments and tables, provide an evidence routine before the conclusion: setup, metric, baseline, comparison, result, limitation.
 - Keep UI copy reader-facing. Say "先看作者要解决的问题" rather than "面向无专业背景大学生".
+- Use chapter checkpoints as learning actions, not decorative summaries: "我能解释 X", "我能读懂 Table 2 的比较对象", "我知道这个图不能证明什么".
+
+## Skill Implications
+
+- The site is a reading scaffold first and a summary second.
+- The original text must remain visible, because annotations teach how to read the paper rather than replacing it.
+- Every major figure/table should be introduced before its conclusion, so the reader learns to inspect evidence.
+- Term explanations should appear at the point of confusion, not in a separate glossary route.
+- Generated diagrams should externalize hidden structure: actors, steps, data flow, training loop, comparison baseline, and uncertainty.
 
 ## Reader Modes To Support
 

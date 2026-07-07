@@ -98,6 +98,30 @@ Create `data/learning-site-manifest.json` for every site:
       "is_inline": true
     }
   ],
+  "paper_figures": [
+    {
+      "figure_id": "fig1",
+      "path": "assets/figures/figure-1.png",
+      "source_page": 3,
+      "primary_rendered_block_id": "block-sec3-p04",
+      "linked_source_ids": ["sec3-p04"],
+      "explanation_cues_present": ["它是什么", "怎么看", "相比谁", "结论是什么", "不能推出什么", "回到原文"]
+    }
+  ],
+  "generated_visuals": [
+    {
+      "id": "qkv-map",
+      "path": "assets/diagrams/qkv-map.png",
+      "model_name": "Image 2",
+      "prompt_language": "zh",
+      "in_image_text_language": "zh-dominant",
+      "chinese_label_ratio": 0.85,
+      "linked_source_ids": ["sec3-p04"],
+      "linked_claim_ids": [],
+      "factual_values_used": [],
+      "source_refs_for_values": []
+    }
+  ],
   "omitted_source_blocks": [],
   "tools_used": {
     "pdf_text": "pdfplumber",
@@ -119,6 +143,8 @@ Use manifest fields to make reader-quality promises auditable:
 - `source_blocks`: per-paragraph evidence that the page can trace rendered text back to the extracted paper.
 - `chapter_coverage`: per-chapter expected/rendered source ids. Do not rely only on total counts.
 - `term_anchors`: inline trigger inventory. `is_inline` should be true for the main learning entry point.
+- `paper_figures`: each source figure/table's primary in-flow location, linked paragraph ids, and explanation cues.
+- `generated_visuals`: model, language, source linkage, and factual-value provenance for each generated teaching image.
 - `omitted_source_blocks`: every skipped paragraph/table/appendix block, with a reader-facing reason.
 
 ## Static reader standards
@@ -131,7 +157,9 @@ Use manifest fields to make reader-quality promises auditable:
 - Figure/table screenshots should be local assets with alt text.
 - Generated diagrams should be local bitmap assets from Image 2 or the available image-generation tool, with nearby HTML explanations. Manual SVG diagrams are acceptable only as fallback after telling the user.
 - Generated-diagram captions should explain the learning purpose, not expose asset provenance. Avoid public labels like "生成教学图资产", "Generated explainer", or prompt summaries in visible UI.
+- Image `alt`, `title`, and `aria-label` are public UI too. Use learner-facing descriptions such as `Q/K/V 概念图` or `Figure 1 架构解读`, not `Generated explainer diagram`.
 - Visible buttons should describe the learning action: `读 Figure 1 架构图`, `放大 Table 2 结果表`, `解释 BLEU`, not repeated generic labels like `打开图表抽屉`.
+- Every reading block should carry a stable `data-source-id` and contain source, translation/Chinese reading, and plain-language explanation in the main flow.
 - Use `Learn <paper short title>` as title and deployment name.
 
 ## Vercel

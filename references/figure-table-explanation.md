@@ -4,6 +4,8 @@
 
 Show each source figure/table near the paragraph that uses it. Do not place all figures at the end by default.
 
+Each figure/table needs a primary reading position. Galleries, drawers, or zoom views are secondary and do not count as coverage unless the figure/table also appears beside the relevant argument.
+
 For large composite figures:
 
 - keep one overview image if useful
@@ -16,6 +18,8 @@ For tables:
 - place the table on one side and the explanation on the other when space allows
 - explain rows, columns, metrics, and baselines before discussing conclusions
 - highlight the cells that support the current claim
+- state the exact comparison: "compared with X, Y is higher/lower by Z" when the source supports it
+- avoid saying "提升" or "更好" without naming the baseline, metric, direction, and limitation
 
 ## Explanation template
 
@@ -28,6 +32,8 @@ For every figure/table, include:
 - **为什么重要**: how it advances the paper's argument.
 - **不能推出什么**: limitation or common over-reading.
 - **回到原文**: which paragraph/claim it supports.
+
+If a figure/table has multiple panels, repeat the template at panel level or provide hotspots that reveal panel-specific explanations. A single generic caption is not enough for a complex multi-panel figure.
 
 ## Experiments
 

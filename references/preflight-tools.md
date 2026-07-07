@@ -22,6 +22,8 @@ Report:
 
 Use the reported `recommended_commands.python` for follow-up extraction/build scripts. Do not assume bare `python3` has the same PDF/image modules as the preflight route; on some machines, `python3` may point to Homebrew or system Python while `pdfplumber`, `pypdf`, or `Pillow` only exist in the bundled Codex runtime.
 
+The shell preflight cannot prove Image 2 availability by itself. It must report `manual_checks.image_generation`, and the main agent must confirm that the current Codex turn exposes an Image 2 or image generation tool before promising generated teaching diagrams.
+
 ## Tool expectations
 
 Prefer these routes:
