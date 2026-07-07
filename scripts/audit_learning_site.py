@@ -17,6 +17,51 @@ from urllib.parse import urlparse
 
 
 class SiteHTMLParser(HTMLParser):
+    VOID_TAGS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+    TEXT_FLOW_CLASSES = {
+        "source-text",
+        "translation-text",
+        "plain-text",
+        "reading-block",
+        "paragraph",
+        "paragraph-body",
+        "source-paragraph",
+    }
+    DETACHED_TERM_CLASSES = {
+        "term-strip",
+        "terms-strip",
+        "term-list",
+        "related-terms",
+        "glossary-strip",
+        "glossary",
+    }
+    TEXT_COLLECT_CLASSES = {
+        "source-text",
+        "translation-text",
+        "plain-text",
+        "figure-note",
+        "figure-explanation",
+        "figure-reader",
+        "source-figure-note",
+        "marginalia",
+        "side-note",
+    }
+
     def __init__(self) -> None:
         super().__init__()
         self.ids: list[str] = []
@@ -25,25 +70,67 @@ class SiteHTMLParser(HTMLParser):
         self.buttons: list[tuple[dict[str, str], int]] = []
         self.starttags: list[tuple[str, dict[str, str], int]] = []
         self.class_counts: dict[str, int] = {}
+        self.visible_text_parts: list[str] = []
+        self.class_texts: dict[str, list[str]] = {}
+        self.term_records: list[dict[str, object]] = []
+        self.aria_counts = {"expanded": 0, "controls": 0, "current": 0}
         self._current_button: dict[str, str] | None = None
         self._button_text: list[str] = []
+        self._class_stack: list[set[str]] = []
+        self._text_collectors: list[dict[str, object]] = []
+        self._skip_depth = 0
         self._line = 1
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_name = tag.lower()
+        is_void = tag_name in self.VOID_TAGS
+        if not is_void:
+            for collector in self._text_collectors:
+                collector["depth"] = int(collector["depth"]) + 1
         attr = {k: (v or "") for k, v in attrs}
         self._line = self.getpos()[0]
         self.starttags.append((tag, attr, self._line))
+        classes = set(attr.get("class", "").split())
+        ancestor_classes = set().union(*self._class_stack) if self._class_stack else set()
+        all_context_classes = ancestor_classes | classes
         for class_name in attr.get("class", "").split():
             self.class_counts[class_name] = self.class_counts.get(class_name, 0) + 1
+        for aria_name in ("aria-expanded", "aria-controls", "aria-current"):
+            if aria_name in attr:
+                self.aria_counts[aria_name.removeprefix("aria-")] += 1
         if "id" in attr:
             self.ids.append(attr["id"])
         if tag == "img":
             self.images.append((attr.get("src", ""), attr.get("alt", ""), self._line))
         if tag == "iframe":
             self.iframes.append((attr.get("src", ""), self._line))
+        is_term = (
+            "term" in classes
+            or "data-term" in attr
+            or "data-term-id" in attr
+            or attr.get("data-open-drawer", "").lower() == "term"
+        )
+        if is_term:
+            self.term_records.append(
+                {
+                    "line": self._line,
+                    "classes": sorted(classes),
+                    "inline": bool(all_context_classes & self.TEXT_FLOW_CLASSES) and not bool(all_context_classes & self.DETACHED_TERM_CLASSES),
+                    "detached": bool(all_context_classes & self.DETACHED_TERM_CLASSES),
+                    "has_aria": any(name in attr for name in ("aria-expanded", "aria-controls", "aria-label")),
+                }
+            )
+        for class_name in classes & self.TEXT_COLLECT_CLASSES:
+            if is_void:
+                continue
+            self._text_collectors.append({"class": class_name, "depth": 1, "parts": []})
+        if tag_name in {"script", "style", "noscript", "svg"}:
+            self._skip_depth += 1
         if tag == "button":
             self._current_button = attr
             self._button_text = []
+        if not is_void:
+            self._class_stack.append(classes)
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "button" and self._current_button is not None:
@@ -52,10 +139,37 @@ class SiteHTMLParser(HTMLParser):
             self.buttons.append((attrs, self.getpos()[0]))
             self._current_button = None
             self._button_text = []
+        finished: list[dict[str, object]] = []
+        for collector in self._text_collectors:
+            collector["depth"] = int(collector["depth"]) - 1
+            if int(collector["depth"]) <= 0:
+                finished.append(collector)
+        if finished:
+            for collector in finished:
+                class_name = str(collector["class"])
+                value = " ".join("".join(collector["parts"]).split())
+                if value:
+                    self.class_texts.setdefault(class_name, []).append(value)
+                self._text_collectors.remove(collector)
+        if tag.lower() in {"script", "style", "noscript", "svg"} and self._skip_depth:
+            self._skip_depth -= 1
+        if self._class_stack:
+            self._class_stack.pop()
 
     def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0:
+            if data.strip():
+                self.visible_text_parts.append(data)
+            for collector in self._text_collectors:
+                cast_parts = collector["parts"]
+                if isinstance(cast_parts, list):
+                    cast_parts.append(data)
         if self._current_button is not None:
             self._button_text.append(data)
+
+    @property
+    def visible_text(self) -> str:
+        return " ".join(" ".join(self.visible_text_parts).split())
 
 
 def is_external_or_embedded(src: str) -> bool:
@@ -226,6 +340,41 @@ setTimeout(() => {
     return errors, warnings
 
 
+PRODUCTION_TEXT_PATTERNS = [
+    (r"面向无专业背景大学生", "audience-targeting note"),
+    (r"生成教学图资产", "generated asset label"),
+    (r"生成教学图用于", "generated asset purpose note"),
+    (r"这张生成", "generated-image production phrasing"),
+    (r"Generated explainer", "generated explainer label"),
+    (r"generated assets?", "generated asset label"),
+    (r"\bmanifest\b", "manifest/internal file label"),
+    (r"\bpreflight\b", "preflight/internal workflow label"),
+    (r"\bregression(?: slice)?\b", "regression/internal test label"),
+    (r"\breader level\b", "reader-level internal label"),
+    (r"\bprompt_summary\b", "prompt summary label"),
+]
+
+
+def compact_text(value: str) -> str:
+    return " ".join(value.split())
+
+
+def explanation_length(value: str) -> int:
+    return len(re.sub(r"\s+", "", value))
+
+
+def source_word_count(value: str) -> int:
+    return len(re.findall(r"[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]", value))
+
+
+def cue_missing(text: str, cue_groups: dict[str, list[str]]) -> list[str]:
+    missing: list[str] = []
+    for cue_name, variants in cue_groups.items():
+        if not any(variant.lower() in text.lower() for variant in variants):
+            missing.append(cue_name)
+    return missing
+
+
 def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object] | None) -> tuple[list[str], list[str]]:
     text = path.read_text(encoding="utf-8", errors="replace")
     parser = SiteHTMLParser()
@@ -247,6 +396,16 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
     translation_count = parser.class_counts.get("translation-label", 0)
     plain_count = parser.class_counts.get("plain-label", 0)
     term_count = parser.class_counts.get("term", 0)
+    inline_term_count = sum(1 for item in parser.term_records if item.get("inline"))
+    detached_term_count = sum(1 for item in parser.term_records if item.get("detached"))
+    visible_text = parser.visible_text
+    source_texts = parser.class_texts.get("source-text", [])
+    translation_texts = parser.class_texts.get("translation-text", [])
+    plain_texts = parser.class_texts.get("plain-text", [])
+    figure_note_texts = []
+    for class_name in ("figure-note", "figure-explanation", "figure-reader", "source-figure-note"):
+        figure_note_texts.extend(parser.class_texts.get(class_name, []))
+    marginalia_text = " ".join(parser.class_texts.get("marginalia", []) + parser.class_texts.get("side-note", []))
     script_count = len(re.findall(r"<script\b", text, re.I))
     language_mode = bool(
         re.search(r"中英|EN only|English only|仅英文|只英文|中文模式", text, re.I)
@@ -287,13 +446,35 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
         errors.append(f"{path}: inline terms are marked but have no detected popover/drawer interaction logic")
     if strict and term_count and not has_popover_or_drawer:
         errors.append(f"{path}: inline terms need an attached popover, drawer, dialog, or side panel")
+    if strict and term_count and inline_term_count == 0:
+        errors.append(f"{path}: terms are not anchored inline in source/translation/explanation text ({detached_term_count} detached term chips found)")
+    if strict and detached_term_count and inline_term_count < detached_term_count:
+        warnings.append(f"{path}: detached term chips outnumber inline term anchors ({detached_term_count} detached vs {inline_term_count} inline)")
     if strict and (term_count or has_popover_or_drawer) and not has_close_affordance:
         errors.append(f"{path}: popovers/drawers/term panels need an obvious close state")
+    if strict and (term_count or has_popover_or_drawer) and parser.aria_counts["expanded"] == 0:
+        errors.append(f"{path}: interactive term/drawer controls should expose state with aria-expanded")
+    if strict and (term_count or has_popover_or_drawer) and parser.aria_counts["controls"] == 0:
+        errors.append(f"{path}: interactive term/drawer controls should connect triggers to panels with aria-controls")
+    if strict and any(name in parser.class_counts for name in ("chapter-map", "chapter-tab", "map-item", "chapter-button")) and parser.aria_counts["current"] == 0:
+        warnings.append(f"{path}: chapter navigation should mark the active chapter with aria-current")
     if strict and source_figures:
-        required_figure_words = ["它是什么", "怎么看", "相比", "结论", "不能推出"]
-        missing_words = [word for word in required_figure_words if word not in text]
-        if missing_words:
-            errors.append(f"{path}: source figure/table explanations are incomplete; missing cues: {', '.join(missing_words)}")
+        figure_cues = {
+            "what": ["它是什么", "是什么", "图里", "表里"],
+            "how-to-read": ["怎么看", "读法", "先看", "如何读"],
+            "comparison": ["相比", "对比", "baseline", "基线"],
+            "conclusion": ["结论", "说明", "支持"],
+            "limitation": ["不能推出", "不能证明", "不代表", "限制"],
+        }
+        if not figure_note_texts:
+            errors.append(f"{path}: source figures/tables need per-figure explanation blocks")
+        elif len(figure_note_texts) < len(source_figures):
+            errors.append(f"{path}: fewer figure/table explanations than source figure/table assets ({len(figure_note_texts)} notes for {len(source_figures)} assets)")
+        for index, note_text in enumerate(figure_note_texts[: len(source_figures)], start=1):
+            missing_cues = cue_missing(note_text, figure_cues)
+            if missing_cues:
+                preview = compact_text(note_text)[:80]
+                errors.append(f"{path}: figure/table explanation #{index} misses cues {', '.join(missing_cues)}: {preview}")
     if diagram_svgs:
         message = f"{path}: generated diagram assets include SVG files under assets/diagrams; use Image 2/bitmap visuals when available: {len(diagram_svgs)} found"
         if strict and not (manifest and manifest.get("allow_svg_fallback") is True):
@@ -327,6 +508,32 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
         if not label:
             warnings.append(f"{path}:{line}: button has no visible text, aria-label, or title")
 
+    if strict:
+        for pattern, label in PRODUCTION_TEXT_PATTERNS:
+            if re.search(pattern, visible_text, re.I):
+                errors.append(f"{path}: public UI exposes internal production text ({label}); rewrite as reader-facing learning copy")
+        if marginalia_text and re.search(r"资产|生成教学图|manifest|preflight|regression|generated assets?", marginalia_text, re.I):
+            errors.append(f"{path}: marginalia/side notes expose production or asset-management language")
+        generic_action_counts: dict[str, int] = {}
+        for attrs, _line in parser.buttons:
+            label = attrs.get("aria-label", "").strip() or attrs.get("title", "").strip() or attrs.get("_text", "").strip()
+            if label:
+                generic_action_counts[label] = generic_action_counts.get(label, 0) + 1
+        for label, count in sorted(generic_action_counts.items()):
+            if count > 3 and label in {"打开图表抽屉", "继续下一章", "查看详情", "展开详情"}:
+                errors.append(f"{path}: repeated generic button label '{label}' appears {count} times; use figure/table/chapter-specific learning actions")
+        long_source_failures = 0
+        for index, source_value in enumerate(source_texts):
+            words = source_word_count(source_value)
+            explanation = plain_texts[index] if index < len(plain_texts) else ""
+            if words >= 50 and explanation_length(explanation) < 100:
+                long_source_failures += 1
+                if long_source_failures <= 5:
+                    preview = compact_text(source_value)[:90]
+                    errors.append(f"{path}: dense source block #{index + 1} has too little Chinese/plain explanation ({words} source tokens): {preview}")
+        if source_texts and translation_texts and len(translation_texts) < len(source_texts):
+            errors.append(f"{path}: fewer translation blocks than source text blocks ({len(translation_texts)} translations for {len(source_texts)} source blocks)")
+
     if re.search(r"<iframe[^>]+pdf", text, re.I):
         errors.append(f"{path}: possible PDF iframe pattern found")
     if "原文" not in text and "Original" not in text:
@@ -344,6 +551,12 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
         expected_visuals = manifest.get("generated_visuals_expected")
         rendered_visuals = manifest.get("generated_visuals_rendered")
         image_model = str(manifest.get("image_generation_model", "")).lower()
+        source_language = str(manifest.get("source_language", "")).lower()
+        source_blocks = manifest.get("source_blocks")
+        chapter_coverage = manifest.get("chapter_coverage")
+        term_anchors = manifest.get("term_anchors")
+        generated_visuals = manifest.get("generated_visuals")
+        generated_visual_language = str(manifest.get("generated_visual_language", "")).lower()
         if isinstance(expected_source, int) and rendered_source < expected_source:
             errors.append(f"{path}: manifest says only {rendered_source}/{expected_source} source paragraphs rendered")
         if isinstance(expected_figures, int) and isinstance(rendered_figures, int) and rendered_figures < expected_figures:
@@ -352,6 +565,56 @@ def audit_html(path: Path, root: Path, strict: bool, manifest: dict[str, object]
             errors.append(f"{path}: manifest says only {rendered_visuals}/{expected_visuals} generated visuals rendered")
         if strict and expected_visuals and "image" not in image_model and "gpt-image" not in image_model:
             errors.append(f"{path}: manifest does not record an Image 2/image-generation model for generated visuals")
+        if strict:
+            if manifest.get("public_ui_clean") is False:
+                errors.append(f"{path}: manifest says public_ui_clean=false")
+            if isinstance(expected_source, int) and expected_source >= 10:
+                if not isinstance(source_blocks, list) or not source_blocks:
+                    errors.append(f"{path}: manifest needs source_blocks[] with per-paragraph ids/hashes, not only total source paragraph counts")
+                if not isinstance(chapter_coverage, list) or not chapter_coverage:
+                    errors.append(f"{path}: manifest needs chapter_coverage[] with expected/rendered/missing source ids per chapter")
+            if isinstance(source_blocks, list):
+                missing_render_refs = []
+                for block in source_blocks[:20]:
+                    if not isinstance(block, dict):
+                        continue
+                    source_id = str(block.get("source_id", ""))
+                    rendered_block_id = str(block.get("rendered_block_id", ""))
+                    if rendered_block_id and rendered_block_id not in text and source_id and source_id not in text:
+                        missing_render_refs.append(rendered_block_id or source_id)
+                if missing_render_refs:
+                    errors.append(f"{path}: manifest source_blocks do not map back to visible DOM ids/snippets: {', '.join(missing_render_refs[:5])}")
+            if term_count:
+                inline_manifest_terms = 0
+                if isinstance(term_anchors, list):
+                    inline_manifest_terms = sum(1 for item in term_anchors if isinstance(item, dict) and item.get("is_inline") is True)
+                if not inline_manifest_terms:
+                    errors.append(f"{path}: manifest needs term_anchors[] with inline source/translation/plain-text locations")
+            term_strip_only_count = manifest.get("term_strip_only_count")
+            if isinstance(term_strip_only_count, int) and term_strip_only_count > 0:
+                errors.append(f"{path}: manifest reports {term_strip_only_count} terms that only exist in detached strips")
+            is_chinese_bilingual = source_language not in {"", "zh", "zh-cn", "zh-hans"} and language_mode
+            if is_chinese_bilingual and isinstance(rendered_visuals, int) and rendered_visuals > 0:
+                if generated_visual_language and generated_visual_language not in {"zh-dominant", "chinese-dominant"}:
+                    errors.append(f"{path}: generated diagrams should be Chinese-dominant for Chinese-bilingual sites, got '{generated_visual_language}'")
+                if not generated_visual_language:
+                    errors.append(f"{path}: manifest must record generated_visual_language for Chinese-bilingual generated diagrams")
+            if isinstance(generated_visuals, list):
+                for index, item in enumerate(generated_visuals, start=1):
+                    if not isinstance(item, dict):
+                        continue
+                    language = str(item.get("in_image_text_language", item.get("prompt_language", ""))).lower()
+                    ratio = item.get("chinese_label_ratio")
+                    if is_chinese_bilingual and language and language not in {"zh", "zh-dominant", "chinese", "chinese-dominant", "mixed"}:
+                        errors.append(f"{path}: generated visual #{index} records non-Chinese-dominant in-image language: {language}")
+                    if is_chinese_bilingual and isinstance(ratio, (int, float)) and ratio < 0.6:
+                        errors.append(f"{path}: generated visual #{index} has low Chinese label ratio ({ratio}); use Chinese-dominant labels/callouts")
+                    factual_values = item.get("factual_values_used")
+                    source_refs = item.get("source_refs_for_values")
+                    if factual_values and not source_refs:
+                        errors.append(f"{path}: generated visual #{index} uses factual values without source_refs_for_values")
+            elif strict and isinstance(rendered_visuals, int) and rendered_visuals > 0:
+                warnings.append(f"{path}: manifest should include generated_visuals[] entries with language and source-link metadata")
     elif strict:
         warnings.append(f"{path}: no learning-site manifest found; add data/learning-site-manifest.json for exact coverage checks")
 

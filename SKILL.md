@@ -20,11 +20,14 @@ Default reader level: a college student with no professional background in the p
 - Non-Chinese papers need a visible language mode control such as `中英 / 中文 / EN only` unless the user explicitly rejects it.
 - Use chapter-switching or section-switching reading by default, not one undifferentiated long page.
 - Keep terms, figures, tables, and side notes attached to the paragraphs they explain.
+- Put term triggers inline on the exact source or translated words they explain. Do not place terms only in a detached "related terms" tag strip.
 - Explain hard terms before using them: term definition, plain-language analogy, meaning in this paper, how the author uses it, and common misunderstanding.
 - Every figure/table from the paper must appear near the relevant argument unless it is truly redundant. Explain how to read it, what comparison it supports, what conclusion follows, and what it does not prove.
 - Use Image 2 or the available image generation model generously as a teaching tool: at least one generated explainer image per chapter and one per major hard concept when useful.
+- For Chinese or Chinese-bilingual learning sites, generated diagrams should use Chinese-dominant labels and callouts. Keep canonical English terms only when useful, preferably paired with Chinese.
 - Do not substitute hand-drawn SVG boxes for Image 2 visuals when the user asked for Image 2 or when an image-generation tool is available. Record generated visual provenance in a manifest.
 - Avoid generic "AI dashboard" styling. Choose a visual language tied to the paper, audience, and source artifacts.
+- Do not expose internal production notes to readers: no "面向无专业背景大学生", "reader level", "preflight", "manifest", "regression slice", "generated assets", or similar build/test wording in the public UI.
 - Before delivery, run a three-pass adversarial review for UI/UX, teaching clarity, bilingual/source coverage, and figure/table explanation coverage.
 
 ## Mandatory Intake
@@ -48,6 +51,7 @@ Read these reference files as needed:
 - Always read `references/intake-and-planning.md` before planning the site.
 - Always read `references/preflight-tools.md` before extracting or building.
 - Always read `references/pedagogy-rules.md` before writing explanations.
+- Always read `references/novice-reader-research.md` before designing the learning path or review criteria.
 - Always read `references/reader-interactions.md` before designing or coding the reader.
 - Always read `references/design-quality-gate.md` before implementing visual design.
 - Read `references/figure-table-explanation.md` when the source contains figures, tables, charts, equations, experiments, or data.
@@ -75,7 +79,7 @@ Use `scripts/preflight_learning_site.py` before implementation. Use `scripts/aud
    - Keep every main-text source paragraph paired with Chinese translation or explanation according to source language.
    - For non-Chinese sources, make the default reading card a two-column or clearly paired `Original paragraph / Chinese reading` block. Do not provide only selected excerpts plus a collapsed raw-source dump.
    - Add a concise plain-language explanation after each meaningful paragraph or paragraph group.
-   - Mark key terms inline with underlines/buttons that open a term popover or side drawer.
+   - Mark key terms inline inside the original/translation/explanation text with underlines/buttons that open a term popover or side drawer. The trigger text must remain readable as part of the sentence.
    - For hard methods, experiments, and metrics, explain the general concept first, then explain the paper-specific use.
 
 4. **Create visuals**
@@ -83,6 +87,7 @@ Use `scripts/preflight_learning_site.py` before implementation. Use `scripts/aud
    - Use Image 2 diagrams for conceptual understanding: workflows, metaphors, system maps, experiment setup, training loops, comparison summaries, and "what the author is doing next" transitions.
    - If Image 2 is unavailable, stop and tell the user before substituting SVG/manual diagrams. Do not silently downgrade.
    - Generated images may include short labels and a few concise explanatory callouts when that improves comprehension; keep long definitions, bilingual paragraphs, and precise evidence explanations in HTML.
+   - For Chinese-bilingual readers, prompt generated images with Chinese labels/callouts first, plus short English term aliases only when needed.
 
 5. **Build the site**
    - Prefer a static HTML/CSS/JS package unless the user asks for a framework or the project already has one.

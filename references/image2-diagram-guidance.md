@@ -33,6 +33,7 @@ For generated visuals, specify:
 - learning purpose: the one thing the image must clarify
 - visual form: flowchart, scene, metaphor, consulting diagram, etc.
 - style tied to paper topic, not generic AI aesthetics
+- for Chinese-bilingual sites, use Chinese as the dominant in-image language; include English only as short aliases for canonical terms when helpful
 - allow short in-image labels and 1-3 concise explanatory callouts when they make the diagram easier to read
 - avoid long paragraphs, dense bilingual text, citations, or exact table values baked into the image
 - leave clean areas for HTML labels or expanded explanations when needed
@@ -42,7 +43,7 @@ For generated visuals, specify:
 Example prompt:
 
 ```text
-Create a clean explainer diagram for a non-specialist college student. Topic: supervised fine-tuning in this paper. Show three stages: human-labeled examples, model practice, evaluation on new tasks. Use a warm pixel-world classroom metaphor with small characters, arrows, and simple icons. Include short stage labels and 1-2 brief callouts inside the image, but keep detailed definitions and bilingual explanation for nearby HTML. Avoid generic neon AI dashboard style.
+Create a clean explainer diagram for a Chinese-bilingual learning site. Topic: supervised fine-tuning in this paper. Show three stages: 人类标注样例, 模型练习, 新任务评估. Use a warm pixel-world classroom metaphor with small characters, arrows, and simple icons. Use Chinese labels and 1-2 brief Chinese callouts inside the image; include short English aliases only when useful. Keep detailed definitions and bilingual explanation for nearby HTML. Avoid generic neon AI dashboard style.
 ```
 
 ## HTML pairing
@@ -57,6 +58,8 @@ Every generated image needs nearby HTML explanation:
 Do not rely on an image alone for factual explanation.
 
 Small amounts of text inside generated images are useful for orientation. The rule is "brief and visual", not "text-free": use short stage names, arrows, labels, or callout phrases inside the bitmap, then put the full teaching explanation in selectable HTML.
+
+Do not prompt Chinese-bilingual explainer images with English-only labels such as "Sequential bottleneck" or "Parallel training" unless the user explicitly wants English-only visuals. Prefer `顺序瓶颈 / sequential bottleneck` or just `顺序瓶颈` when the concept is explained nearby in HTML.
 
 ## Provenance
 

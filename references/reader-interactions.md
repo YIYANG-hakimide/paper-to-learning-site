@@ -10,7 +10,7 @@ Recommended layout:
 - main reading panel with source/translation/explanation blocks
 - side learning panel that changes with the active paragraph
 - figure/table drawer for close reading
-- term popovers opened from underlined inline terms
+- term popovers opened from underlined inline terms inside the original paragraph, translation, or explanation
 - language mode segmented control for non-Chinese sources
 
 ## Interaction rules
@@ -19,6 +19,10 @@ Recommended layout:
 - Clicking "continue" should move to the next chapter/landmark, not repeat the current content.
 - If chapter switching is primary, avoid making the user scroll through unrelated repeated sections.
 - Keep terminology and figures close to the paragraph where they matter.
+- Terms must be anchored to the exact words they explain. Do not rely on detached tag strips or glossary chips as the only interaction.
+- Each paragraph should have a stable anchor so side notes, figure drawers, and popovers can point back to the source sentence.
+- Side panels should track the active paragraph and expose "回到原文" or equivalent anchors for notes, figures, and claims.
+- Use semantic highlight colors consistently, for example: method terms, evidence, limitations, and definitions should not share arbitrary colors.
 - Let users expand deeper explanations without forcing every detail into the main line.
 - Preserve reading flow: the main text should still make sense if all drawers are closed.
 - Do not make the reader open an appendix or raw extraction panel to access the paper's real text.
@@ -38,6 +42,8 @@ Avoid:
 - cards inside cards
 - end-loaded figure galleries disconnected from the argument
 - text baked into screenshots when it should be selectable HTML
+- detached "related terms" rows that force the reader to guess which sentence the term belongs to
+- visible internal workflow labels such as manifest, preflight, regression, generated asset, reader level, or target audience notes
 
 ## Responsive and accessibility checks
 

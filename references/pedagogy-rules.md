@@ -28,6 +28,24 @@ For each paragraph or small paragraph group:
 
 Avoid a tiny Chinese summary after a large English passage. Long source passages need proportional explanation.
 
+## Inline terms
+
+Term triggers must be embedded on the exact word or phrase inside the original paragraph, Chinese translation, or plain-language explanation. A separate "相关术语" strip is not enough, because it breaks the reader's ability to connect the concept to the sentence.
+
+Use this pattern:
+
+```html
+The model uses <button class="term" data-term="self-attention">self-attention</button> to compare positions.
+```
+
+Do not use this as the only term entry point:
+
+```html
+<div class="term-strip"><button class="term">Self-attention</button></div>
+```
+
+If the source term is English and the site is Chinese-bilingual, the trigger can show both when space allows: `自注意力 / self-attention`. The popover should still include the full explanation ladder.
+
 ## Chapter logic
 
 Each chapter needs:
@@ -61,3 +79,5 @@ Write like a good teaching assistant:
 - no empty praise of the paper
 - no unexplained jargon
 - no decorative summaries that hide missing evidence
+- no public-facing production notes such as "面向无专业背景大学生", "本次测试", "preflight", "manifest", "regression", "generated assets", or "reader level"
+- describe what the chapter helps the reader understand, not what audience profile the generator was targeting

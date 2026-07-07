@@ -2,7 +2,7 @@
 
 ## Benchmark
 
-Use the Agentopia reader quality as a baseline: the first viewport should immediately feel like a designed learning product, not an internal generated note.
+Use the Agentopia reader quality as a floor, not a template or ceiling. The first viewport should immediately feel like a designed learning product, not an internal generated note. For each paper, choose the visual system that best fits the topic, audience, and source artifacts; do not force the Agentopia pixel style when another editorial, notebook, report, manga, or product-reader style would teach better.
 
 The first viewport should usually include:
 
@@ -12,6 +12,7 @@ The first viewport should usually include:
 - main reading card with paragraph-level original text and Chinese reading
 - synchronized side note, marginalia, or learning panel
 - paper-specific visual assets or generated illustrations
+- no visible internal workflow or audience-targeting copy
 
 ## Fail states
 
@@ -24,6 +25,19 @@ Reject and redesign if the page looks like any of these:
 - full paper text hidden in collapsed raw `<pre>` blocks while the main reader shows only excerpts
 - no language mode for non-Chinese material
 - no theme derived from the paper topic, figures, audience, or user preference
+- hero or intro copy that says who the generator targeted, e.g. "面向无专业背景大学生", instead of speaking directly to the reader about what they will understand
+- interaction hints that are visually ambiguous, such as a lone underlined term outside the paragraph with no nearby explanation of what clicking does
+
+## Reader Product Bar
+
+Aim beyond a static web page:
+
+- paragraph-level focus, with active paragraph state and synchronized side notes
+- inline annotations attached to exact words, sentences, figures, and table cells
+- clean reading mode plus optional original PDF/page context for layout-sensitive evidence
+- semantic highlight colors with a visible or discoverable legend
+- figure/table close-reading panels that teach how to inspect evidence, not just show screenshots
+- short "what to look for" prompts before hard sections and "what you should now know" after them
 
 ## Visual direction
 
