@@ -11,7 +11,9 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - Does it avoid generic AI/dashboard aesthetics?
    - Does it avoid plain gray/white three-column documentation styling unless the topic explicitly calls for it?
    - Are chapter switching, drawers, term popovers, and close states obvious?
+   - Do language controls, term triggers, drawers, and figure panels actually change state, rather than appearing as decorative buttons?
    - Is there no text overlap on mobile and desktop?
+   - Is there no horizontal clipping on mobile, especially inside figure/table explanation rows and bilingual paragraph blocks?
    - Does the reader avoid repeated dead-end navigation?
 
 2. **Teaching comprehension**
@@ -40,4 +42,5 @@ Do not call the site complete until:
 - local images load
 - popovers/drawers open and close
 - no obvious layout overlap exists
+- strict audit has been run after the final build; if the audit reports missing interaction logic, missing close states, incomplete figure explanation cues, or mobile overflow, fix the site instead of waiving it
 - the page title and deployment name are paper-specific

@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -29,18 +30,23 @@ def command_path(*names: str) -> str | None:
     return None
 
 
-def python_module(name: str) -> bool:
+def bundled_python() -> Path:
+    return dependency_root() / "python" / "bin" / "python3"
+
+
+def python_module(name: str) -> tuple[bool, str | None]:
     if importlib.util.find_spec(name) is not None:
-        return True
-    bundled_python = dependency_root() / "python" / "bin" / "python3"
-    if bundled_python.exists():
+        return True, sys.executable
+    candidate = bundled_python()
+    if candidate.exists():
         code = f"import {name}"
         try:
-            result = subprocess.run([str(bundled_python), "-c", code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            result = subprocess.run([str(candidate), "-c", code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
         except Exception:
-            return False
-        return result.returncode == 0
-    return False
+            return False, None
+        if result.returncode == 0:
+            return True, str(candidate)
+    return False, None
 
 
 def node_can_import(package: str) -> bool:
@@ -75,6 +81,11 @@ def status(ok: bool, detail: str | None = None) -> dict[str, object]:
 
 
 def main() -> int:
+    pdfplumber_ok, pdfplumber_python = python_module("pdfplumber")
+    pypdf_ok, pypdf_python = python_module("pypdf")
+    pillow_ok, pillow_python = python_module("PIL")
+    recommended_python = pdfplumber_python or pypdf_python or pillow_python or sys.executable
+
     checks: dict[str, dict[str, object]] = {
         "python3": status(bool(command_path("python3")), command_path("python3")),
         "node": status(bool(command_path("node")), command_path("node")),
@@ -86,9 +97,9 @@ def main() -> int:
         "pdftoppm": status(bool(command_path("pdftoppm")), command_path("pdftoppm")),
         "sips": status(bool(command_path("sips")), command_path("sips")),
         "imagemagick": status(bool(command_path("magick", "convert")), command_path("magick", "convert")),
-        "python_pdfplumber": status(python_module("pdfplumber")),
-        "python_pypdf": status(python_module("pypdf")),
-        "python_pillow": status(python_module("PIL")),
+        "python_pdfplumber": status(pdfplumber_ok, pdfplumber_python),
+        "python_pypdf": status(pypdf_ok, pypdf_python),
+        "python_pillow": status(pillow_ok, pillow_python),
         "node_playwright": status(node_can_import("playwright")),
         "chrome_headless": status(bool(chrome_path()), chrome_path()),
     }
@@ -110,7 +121,16 @@ def main() -> int:
     if not routes["browser_qa"]:
         blockers.append("No browser QA route found: install Playwright or use system Chrome.")
 
-    report = {"checks": checks, "routes": routes, "blockers": blockers}
+    report = {
+        "checks": checks,
+        "routes": routes,
+        "recommended_commands": {
+            "python": recommended_python,
+            "node": command_path("node"),
+            "chrome": chrome_path(),
+        },
+        "blockers": blockers,
+    }
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 1 if blockers else 0
 

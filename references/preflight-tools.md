@@ -17,7 +17,10 @@ Report:
 - Image 2 or image-generation route
 - browser/screenshot verification route
 - Vercel route if deployment was requested
+- the exact recommended Python executable from `recommended_commands.python`
 - blockers and fallbacks
+
+Use the reported `recommended_commands.python` for follow-up extraction/build scripts. Do not assume bare `python3` has the same PDF/image modules as the preflight route; on some machines, `python3` may point to Homebrew or system Python while `pdfplumber`, `pypdf`, or `Pillow` only exist in the bundled Codex runtime.
 
 ## Tool expectations
 
