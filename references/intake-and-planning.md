@@ -34,7 +34,7 @@ Before implementation, write a design brief with concrete rules, not mood words:
 - typography roles for original text, Chinese reading, plain explanation, notes, captions, controls, formulas/code
 - color semantics for terms, evidence, limitations, definitions, and active state
 - spacing rhythm, source-text line width, and reading density
-- component rules for reading blocks, side notes, term panels, figure modules, quizzes, and large-image views
+- component rules for reading blocks, side notes, term panels, figure modules, chapter reviews, and large-image views
 - responsive behavior: desktop, tablet, mobile, touch target size, panel collapse strategy
 - figure/table strategy: large view, split panels, image-top/text-bottom, or redraw/annotation approach
 - what this paper-specific site should avoid, such as generic AI gradients, dashboard grids, tiny figures, or decorative images

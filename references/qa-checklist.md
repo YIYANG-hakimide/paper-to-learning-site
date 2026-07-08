@@ -22,7 +22,9 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - Do interaction labels tell the learner what they will get, for example `解释 Table 2 的提升` or `拆开这个公式`, instead of vague buttons like `查看详情`?
    - Are term triggers underlined or otherwise discoverable inside the original sentence, translation, or explanation, not only in a detached term/tag strip?
    - Do term explanations open beside the active paragraph on desktop, or in a bottom sheet/in-flow accordion on mobile, without hiding the paragraph the reader clicked from?
+   - On mobile, does the term explanation preserve context instead of covering most of the active paragraph?
    - Does closing a term explanation return focus or scroll context to the clicked word?
+   - Does the side note visibly update when the active paragraph changes?
    - Do interactive controls expose state with `aria-expanded`, `aria-controls`, `aria-current`, or equivalent accessible semantics?
    - Do repeated action buttons name the learning action, figure/table, or chapter instead of generic labels like `打开图表抽屉`?
    - Is there no text overlap on mobile and desktop?
@@ -73,8 +75,9 @@ When maintaining this skill or validating a high-risk site, run and record these
 6. Inline terms open without covering the active reading block.
 7. Term panels close cleanly and return to the clicked source.
 8. Every dense figure/table is readable by default or has a tested large/split view.
-9. Every quiz choice or problem tab produces meaningful feedback.
-10. Public copy scan passes for side notes, alt text, aria labels, and drawer labels.
+9. Every chapter-review choice or problem tab produces meaningful feedback and a visible return-to-evidence path.
+10. Mobile dynamic interactions pass: term panel overlap, side-note sync, and review feedback link.
+11. Public copy scan passes for side notes, alt text, aria labels, and drawer labels.
 
 ## Novice-reader acceptance
 

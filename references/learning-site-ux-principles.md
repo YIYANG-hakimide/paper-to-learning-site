@@ -22,7 +22,7 @@ Before coding, write a mini `DESIGN.md` for the paper. Borrow the `awesome-desig
 - typography scale for paper text, Chinese reading, notes, and controls
 - color roles for terms, evidence, limitations, and review actions
 - layout modes per chapter type
-- component rules for reading blocks, side notes, figures, term panels, quizzes, and big-image views
+- component rules for reading blocks, side notes, figures, term panels, chapter reviews, and big-image views
 - mobile behavior for every panel
 - examples of what this paper's site should avoid
 
@@ -31,10 +31,12 @@ Do not copy a brand skin. Apple-like restraint, Claude-like warmth, pixel/game s
 ## Reader Interactions
 
 - Inline terms should open an adjacent side panel on desktop, not a centered modal that hides the paragraph. On mobile, use a bottom sheet or in-flow accordion with a clear close state.
+- Mobile term explanations must preserve context: avoid bottom sheets taller than half the viewport unless the explanation is in-flow, and keep the triggering sentence visible.
 - A term explanation must preserve context: highlight the trigger word, include a `回到原词/回到原文` path, and return focus to the trigger on close.
 - Side notes are public teaching copy. They may say `本段核心`, `为什么重要`, `怎么看证据`, or `容易误解`; they must not contain internal process, audit, asset-generation prompts, asset-management notes, or production thinking.
 - Chapter, question, language, term, and figure controls must never open empty shells. Each state needs real content, a return path, and a next learning action.
-- A question or quiz mode cannot replace the paper. It must link back to the exact source paragraph or figure that taught the answer.
+- A question or chapter-review mode cannot replace the paper. It must link back to the exact source paragraph or figure that taught the answer.
+- Synchronized side notes must actually change with the active paragraph; a static note rail that looks synchronized is misleading.
 
 ## Visual And Figure Layout
 
@@ -70,5 +72,6 @@ When maintaining this skill or validating a new site, run at least ten checks:
 6. Inline terms open without obscuring the active reading block.
 7. Term close returns focus or scroll position to the trigger.
 8. Every source figure/table is readable in default view or has a real large view.
-9. Every quiz/question choice produces meaningful feedback and links back to evidence.
-10. Side notes, alt text, labels, and drawer copy contain no production/internal language.
+9. Every chapter-review/question choice produces meaningful feedback and links back to evidence.
+10. Mobile dynamic checks pass: term sheet overlap, side-note sync, and review return-to-evidence.
+11. Side notes, alt text, labels, and drawer copy contain no production/internal language.

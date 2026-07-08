@@ -66,8 +66,8 @@ Use the principle, not the visual skin:
 - Hypothesis-style anchored annotation: comments attach directly to the source sentence.
 - Distill/Observable-style interaction: details-on-demand, small interactive explanations, and visual outputs live beside the prose.
 - Science in the Classroom-style annotation: novice explanations overlay the original article instead of replacing it.
-- Get It.-style document anchoring: concept tags should open visualizers, quizzes, or knowledge-map nodes without replacing the source document.
-- Paper-to-course-style learning modules: formula breakdowns, timelines, method chats, comparison tables, ablation diagrams, and quizzes are useful when tied to exact paper content.
+- Get It.-style document anchoring: concept tags should open visualizers, review cards, or knowledge-map nodes without replacing the source document.
+- Paper-to-course-style learning modules: formula breakdowns, timelines, method chats, comparison tables, ablation diagrams, and chapter reviews are useful when tied to exact paper content.
 
 ## Visual direction
 
@@ -110,6 +110,6 @@ Run at least these design reviews before final delivery:
 
 1. **Layout rhythm**: sections should not all use the same card pattern. Check that methods, formulas, figures, experiments, and review cards have forms suited to their content.
 2. **Reading typography**: CJK/Latin text should have comfortable line height, stable width, `lang` attributes where feasible, and no overlong lines.
-3. **Interaction clarity**: every clickable term, figure, visualizer, quiz, or chapter control should look clickable and explain what will happen.
+3. **Interaction clarity**: every clickable term, figure, visualizer, chapter-review, or chapter control should look clickable and explain what will happen.
 4. **Evidence legibility**: every source figure/table and generated explainer should be readable at its default size or have a tested large/split view.
 5. **Public-copy hygiene**: side notes, alt text, drawer headings, and aria labels should sound like a teacher, not a build log or self-review.

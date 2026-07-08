@@ -53,7 +53,7 @@ learn-paper-title/
 - 跟随正文出现的术语弹窗
 - 跟随段落变化的旁注或学习面板
 - 图表抽屉、图表热点或左右对照解读
-- 公式拆解、方法时间线、概念地图、对比表、章节小测、Feynman 式自我解释卡
+- 公式拆解、方法时间线、概念地图、对比表、本章核心要点回顾、Feynman 式自我解释卡
 - 每章逻辑总结、学习检查点和下一章衔接
 - 桌面与移动端可读的响应式布局
 
@@ -158,7 +158,7 @@ python3 ~/.codex/skills/paper-to-learning-site/scripts/audit_learning_site.py <s
 - 阅读块是否缺少稳定 `data-source-id`
 - 图表按钮是否都是“打开图表抽屉”这类无法理解的重复泛称
 - 生成图是否记录中文主导、Image 2/图像模型来源和对应段落
-- 每章是否有真实学习动作，例如拆公式、读图表、对比 baseline、测一下本章、看概念图
+- 每章是否有真实学习动作，例如拆公式、读图表、对比 baseline、回顾本章核心要点、看概念图
 
 这个脚本不是完整 QA，但会把“看起来内容很多、实际不帮助阅读”的常见坏味道提前拦下来。
 
@@ -219,7 +219,7 @@ The reader experience usually includes:
 - inline term popovers
 - synchronized side notes or learning panel
 - figure drawers, figure hotspots, or side-by-side figure interpretation
-- formula breakdowns, method timelines, concept maps, comparison tables, quizzes, and Feynman-style review cards
+- formula breakdowns, method timelines, concept maps, comparison tables, chapter core recaps, and Feynman-style review cards
 - chapter logic summaries, learning checkpoints, and next-chapter bridges
 - responsive layout for desktop and mobile
 

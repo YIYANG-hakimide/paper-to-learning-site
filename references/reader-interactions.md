@@ -17,6 +17,7 @@ Recommended layout:
 
 - Every popover, drawer, bubble, and floating panel must have an obvious close state.
 - Term explanations should not hide the active paragraph. On desktop, prefer a right/side panel, adjacent annotation rail, or anchored panel that does not overlap the current `.reading-block`; on mobile, use a bottom sheet or in-flow accordion.
+- Mobile term explanations should not cover most of the paragraph the reader clicked from. Prefer an in-flow accordion; if using a bottom sheet, keep it below half the viewport and scroll the trigger sentence above the sheet.
 - If a modal or drawer is unavoidable, it must include `回到原词/回到原文`, close on Escape, and return focus to the clicked term.
 - Clicking "continue" should move to the next chapter/landmark, not repeat the current content.
 - If chapter switching is primary, avoid making the user scroll through unrelated repeated sections.
@@ -25,6 +26,7 @@ Recommended layout:
 - Each paragraph should have a stable anchor so side notes, figure drawers, and popovers can point back to the source sentence.
 - Each reading block should expose a stable `data-source-id` that matches the manifest.
 - Side panels should track the active paragraph and expose "回到原文" or equivalent anchors for notes, figures, and claims.
+- Side-note tracking must be visibly real. Clicking or focusing a different reading block should update the note title/body and return link.
 - Side notes should be written as public learning notes: `本段核心`, `为什么重要`, `怎么看证据`, `容易误解`. Do not expose internal process, audit, asset-generation prompts, target-reader, or reviewer-planning language.
 - Use semantic highlight colors consistently, for example: method terms, evidence, limitations, and definitions should not share arbitrary colors.
 - Let users expand deeper explanations without forcing every detail into the main line.
@@ -32,11 +34,11 @@ Recommended layout:
 - Do not make the reader open an appendix or raw extraction panel to access the paper's real text.
 - Do not make a chapter map that only jumps to repeated summaries. Chapter switching should reveal that chapter's original/translation/explanation blocks.
 - For layout-sensitive original text, let the reader toggle between `排版截图` and `可选文字`, but keep both tied to the same `data-source-id`.
-- Add review actions when useful: "测一下这章", "用自己的话解释", "看概念图", or "回到证据".
-- A knowledge map, quiz, or Feynman card must link back to the paragraph/figure that taught the concept; otherwise it becomes disconnected decoration.
+- Add review actions when useful: "本章核心要点回顾", "用自己的话解释", "看概念图", or "回到证据".
+- A knowledge map, chapter-review card, or Feynman card must link back to the paragraph/figure that taught the concept; otherwise it becomes disconnected decoration.
 - Language mode must be a real stateful interaction. It should update visible layers without losing the active chapter, active paragraph, synchronized side note, or open drawer context.
 - Do not leave `href="#"`, unlabeled icon controls, repeated "查看详情", or placeholder buttons in the final page.
-- Do not leave chapter tabs, question tabs, language modes, quiz choices, or figure buttons that open a title-only or empty panel. If a control exists, test every state.
+- Do not leave chapter tabs, question tabs, language modes, review choices, or figure buttons that open a title-only or empty panel. If a control exists, test every state.
 - For static HTML, use the bundled `assets/reader-runtime.js` or match its DOM contract. Do not bind chapter navigation with `querySelectorAll('[data-chapter]')`, because reading blocks may also carry `data-chapter`; use `button[data-chapter], a[data-chapter], [role="tab"][data-chapter]`.
 
 ## Interaction inventory
@@ -47,8 +49,9 @@ Before final delivery, record and test each meaningful interaction:
 - state change: what becomes visible, hidden, active, or selected
 - close method: close button, Escape, outside click, back action, or return link
 - source linkage: `source_id`, `figure_id`, `claim_id`, or chapter id
-- feedback: quiz answer, visualizer state, active tab, or highlighted evidence
+- feedback: chapter-review answer, visualizer state, active tab, or highlighted evidence
 - focus/return path: after close, the user should be back at the term, figure, table, or paragraph that launched the interaction
+- evidence return: chapter-review feedback should include a visible link or button that returns to the source paragraph/table supporting the point
 
 Delete interactions that cannot pass this inventory. A static card is better than a fake button.
 
@@ -73,7 +76,7 @@ Avoid:
 - a term popover triggered only from a glossary chip when the term appears unclickable in the paragraph
 - visible internal workflow labels such as manifest, preflight, regression, generated asset, reader level, or target audience notes
 - modal term explanations that cover the exact paragraph the user was reading
-- question or quiz tabs that have no source paragraph, evidence, or feedback for choices 3/4/5/6
+- question or chapter-review tabs that have no source paragraph, evidence, or feedback for choices 3/4/5/6
 
 ## Responsive and accessibility checks
 

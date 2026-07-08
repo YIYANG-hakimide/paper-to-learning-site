@@ -70,15 +70,15 @@ After implementation:
 - Serve over HTTP when possible and verify in a browser.
 - Check desktop first viewport: paper title, chapter navigation, language mode for non-Chinese papers, source paragraph, Chinese reading, explanation/side note, and at least one term or evidence affordance.
 - Check mobile: no horizontal overflow; bilingual blocks stack cleanly; panels are closable.
-- Smoke test: switch chapter, switch language, open/close term, open/close figure/table explanation, activate a visual/quiz/review control.
+- Smoke test: switch chapter, switch language, open/close term, open/close figure/table explanation, activate a visual or chapter-review control.
 - Record `layout_strategy`, `source_rendering_modes`, `source_screenshot_blocks`, and `interaction_inventory` in the manifest.
 - Record `visual_readability_checks` and note whether dense figures used large view, split panels, or image-top layout.
 
 ## Reference Inspirations
 
 - `jimliu/baoyu-design`: design process, HTTP preview, screenshot verification, and anti-slop design craft.
-- `beltromatti/get-it`: document-anchored concept tags, right-pane visualizers, knowledge graph, quizzes, and Feynman-style self-explanation.
-- `KaguraTart/paper-to-course`: course modules, timeline, comparison table, formula breakdown, method chat, ablation diagram, and quiz components.
+- `beltromatti/get-it`: document-anchored concept tags, right-pane visualizers, knowledge graph, review cards, and Feynman-style self-explanation.
+- `KaguraTart/paper-to-course`: course modules, timeline, comparison table, formula breakdown, method chat, ablation diagram, and chapter-review components.
 - `c-narcissus/agent-paper-grounded-reading`: traceability artifacts and static evidence reader contract.
 - `FeijiangHan/PaperForge`: author-reasoning reconstruction, fragile-assumption checks, minimal reproduction, and strongest counterexample thinking.
 - `a1henu/paper-reading-skill`: self-contained Chinese explainer pages with intuition-before-math, notation tables, concrete walkthroughs, and pedagogy critique.

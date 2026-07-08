@@ -74,7 +74,7 @@ Do not create a public section titled like "生成教学图资产" or "Generated
 Record generated visuals in `data/learning-site-manifest.json`:
 
 - file path
-- model/tool used
+- model/tool used, explicitly as `Image 2` or `gpt-image-2` for positive/final builds
 - chapter/section
 - teaching purpose
 - prompt summary
@@ -84,3 +84,5 @@ Record generated visuals in `data/learning-site-manifest.json`:
 - factual values used and their source refs, if any
 
 If the asset was manually drawn SVG, mark it as `manual-svg-fallback` and do not count it as an Image 2 generated visual.
+
+For positive tests and final delivery, actually call the built-in image generation tool or the approved Image 2/gpt-image-2 route. Do not create a placeholder PNG, screenshot an SVG, or write `Image 2` in the manifest without a real generated bitmap copied into `assets/diagrams/` and embedded near the concept it teaches.

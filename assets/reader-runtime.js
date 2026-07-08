@@ -93,11 +93,17 @@
     const sourceId = block.dataset.sourceId || block.id || "";
     state.activeSourceId = sourceId;
 
-    const noteText = block.dataset.note || first("[data-note-text]", block)?.textContent || "";
+    const noteTitle = block.dataset.noteTitle || first("[data-note-title]", block)?.textContent || "";
+    const noteBody = block.dataset.noteBody || first("[data-note-body]", block)?.textContent || "";
+    const noteText = block.dataset.note || first("[data-note-text]", block)?.textContent || noteBody || "";
     const sideNote = first("#side-note,[data-side-note]");
+    const sideTitle = first("#side-note-title,[data-side-note-title],[data-note-title]", sideNote || document);
     const sideText = first("#side-note-text,[data-side-note-text]", sideNote || document);
+    const sideBody = first("#side-note-body,[data-side-note-body],[data-note-body]", sideNote || document);
     const sideLink = first("#side-note-link,[data-side-note-link]", sideNote || document);
+    if (sideTitle && noteTitle) sideTitle.textContent = noteTitle;
     if (sideText && noteText) sideText.textContent = noteText;
+    if (sideBody && noteText) sideBody.textContent = noteText;
     if (sideLink && block.id) {
       sideLink.href = `#${block.id}`;
       sideLink.textContent = "回到原文";
@@ -134,6 +140,11 @@
       back.textContent = "回到原词";
     }
     setPanelVisible(panel, true);
+    if (window.innerWidth <= 900) {
+      requestAnimationFrame(() => {
+        trigger.scrollIntoView({ block: "start", inline: "nearest" });
+      });
+    }
     document.dispatchEvent(new CustomEvent("learning-site:term-open", { detail: { termId, sourceId } }));
   }
 
@@ -165,20 +176,36 @@
     document.dispatchEvent(new CustomEvent("learning-site:figure-open", { detail: { figureId, sourceId } }));
   }
 
-  function answerQuiz(choice) {
-    const card = choice.closest("[data-quiz],.quiz-card");
+  function answerReview(choice) {
+    const card = choice.closest("[data-review],.review-card,[data-quiz],.quiz-card");
     if (!card) return;
-    const quizId = card.dataset.quiz || card.id || "";
-    const choiceId = choice.dataset.quizChoice || choice.value || choice.textContent.trim();
-    const feedback = first(".quiz-feedback,[data-quiz-feedback],[aria-live]", card);
+    const reviewId = card.dataset.review || card.dataset.quiz || card.id || "";
+    const choiceId = choice.dataset.reviewChoice || choice.dataset.quizChoice || choice.value || choice.textContent.trim();
+    const feedback = first(".review-feedback,[data-review-feedback],.quiz-feedback,[data-quiz-feedback],[aria-live]", card);
     const configured = choice.dataset.feedback
-      || window.LEARNING_SITE_QUIZ_FEEDBACK?.[quizId]?.[choiceId]
+      || window.LEARNING_SITE_REVIEW_FEEDBACK?.[reviewId]?.[choiceId]
+      || window.LEARNING_SITE_QUIZ_FEEDBACK?.[reviewId]?.[choiceId]
       || "";
-    if (feedback) feedback.textContent = configured;
     const sourceId = choice.dataset.sourceId || card.dataset.sourceId;
     const block = sourceId ? first(`[data-source-id="${cssEscape(sourceId)}"]`) : first(".reading-block,[data-source-id]", card.closest("[data-chapter-panel]") || document);
+    if (feedback) {
+      feedback.textContent = configured;
+      if (block?.id) {
+        const link = document.createElement("a");
+        link.href = `#${block.id}`;
+        link.textContent = " 回到原文证据";
+        link.className = "review-evidence-link";
+        link.addEventListener("click", () => {
+          all(".is-review-target").forEach((item) => item.classList.remove("is-review-target"));
+          block.classList.add("is-review-target");
+          updateSideNote(block);
+        });
+        feedback.appendChild(link);
+      }
+    }
     if (block) updateSideNote(block);
-    document.dispatchEvent(new CustomEvent("learning-site:quiz-answer", { detail: { quizId, choiceId, sourceId } }));
+    document.dispatchEvent(new CustomEvent("learning-site:review-answer", { detail: { reviewId, choiceId, sourceId } }));
+    document.dispatchEvent(new CustomEvent("learning-site:quiz-answer", { detail: { quizId: reviewId, choiceId, sourceId } }));
   }
 
   document.addEventListener("click", (event) => {
@@ -207,10 +234,10 @@
       openFigure(figure.dataset.figure || figure.dataset.figureId, figure);
       return;
     }
-    const quizChoice = event.target.closest("[data-quiz-choice]");
-    if (quizChoice) {
+    const reviewChoice = event.target.closest("[data-review-choice],[data-quiz-choice]");
+    if (reviewChoice) {
       event.preventDefault();
-      answerQuiz(quizChoice);
+      answerReview(reviewChoice);
       return;
     }
     const close = event.target.closest("[data-close],[data-close-panel],.close-drawer");
@@ -246,6 +273,7 @@
     closePanels,
     openTerm,
     openFigure,
-    answerQuiz,
+    answerReview,
+    answerQuiz: answerReview,
   };
 })();

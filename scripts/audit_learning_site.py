@@ -980,7 +980,7 @@ setTimeout(async () => {
     const blockRect = block ? block.getBoundingClientRect() : null;
     termButton.click();
     await wait();
-    const panel = document.querySelector('#term-popover[aria-hidden="false"],.term-popover[aria-hidden="false"],.term-drawer[aria-hidden="false"],[data-term-panel][aria-hidden="false"],dialog[open]');
+    const panel = document.querySelector('#term-panel[aria-hidden="false"],#term-popover[aria-hidden="false"],.term-popover[aria-hidden="false"],.term-drawer[aria-hidden="false"],[data-term-panel][aria-hidden="false"],dialog[open]');
     if (!panel || !visible(panel)) {
       errors.push(`term '${termId}' did not open a visible explanation panel`);
       continue;
@@ -1032,7 +1032,7 @@ setTimeout(async () => {
     const inlineRect = inlineImg ? inlineImg.getBoundingClientRect() : null;
     figureButton.click();
     await wait();
-    const drawer = document.querySelector('#figure-drawer[aria-hidden="false"],.figure-drawer[aria-hidden="false"],[data-figure-panel][aria-hidden="false"],dialog[open]');
+    const drawer = document.querySelector('#figure-panel[aria-hidden="false"],#figure-drawer[aria-hidden="false"],.figure-drawer[aria-hidden="false"],[data-figure-panel][aria-hidden="false"],dialog[open]');
     const drawerImg = drawer ? drawer.querySelector('img') : null;
     if (!drawer || !visible(drawer) || !drawerImg || !visible(drawerImg) || !(drawerImg.naturalWidth > 0)) {
       errors.push(`figure '${figureId}' did not open a visible loaded large view`);
@@ -1054,9 +1054,9 @@ setTimeout(async () => {
     }
   }
 
-  const quizCards = Array.from(document.querySelectorAll('[data-quiz],.quiz-card'));
-  const allQuizFeedback = [];
-  for (const card of quizCards) {
+  const reviewCards = Array.from(document.querySelectorAll('[data-review],.review-card,[data-quiz],.quiz-card'));
+  const allReviewFeedback = [];
+  for (const card of reviewCards) {
     const chapterPanel = card.closest('[data-chapter-panel]');
     if (chapterPanel && !visible(chapterPanel)) {
       const chapterId = chapterPanel.dataset.chapterPanel || chapterPanel.id;
@@ -1066,21 +1066,21 @@ setTimeout(async () => {
         await wait();
       }
     }
-    const choices = Array.from(card.querySelectorAll('[data-quiz-choice],button')).filter(visible);
-    const feedback = card.querySelector('.quiz-feedback,[aria-live]');
+    const choices = Array.from(card.querySelectorAll('[data-review-choice],[data-quiz-choice],button')).filter(visible);
+    const feedback = card.querySelector('.review-feedback,[data-review-feedback],.quiz-feedback,[aria-live]');
     for (const choice of choices) {
       choice.click();
       await wait();
       const value = feedback ? (feedback.innerText || '').replace(/\s+/g, ' ').trim() : '';
       if (value.length < 16) {
-        errors.push(`quiz choice '${choice.innerText.trim().slice(0, 40)}' produced empty or weak feedback`);
+        errors.push(`chapter review choice '${choice.innerText.trim().slice(0, 40)}' produced empty or weak feedback`);
       } else {
-        allQuizFeedback.push(value);
+        allReviewFeedback.push(value);
       }
     }
   }
-  if (quizCards.length >= 3 && allQuizFeedback.length >= quizCards.length && new Set(allQuizFeedback).size <= 2) {
-    errors.push(`quiz feedback is repeated across chapters; make feedback chapter/evidence-specific`);
+  if (reviewCards.length >= 3 && allReviewFeedback.length >= reviewCards.length && new Set(allReviewFeedback).size <= 2) {
+    errors.push(`chapter review feedback is repeated across chapters; make feedback chapter/evidence-specific`);
   }
 
   const metrics = {errors, warnings};
@@ -1152,6 +1152,97 @@ document.body.appendChild(pre);
     return errors, warnings
 
 
+def run_mobile_interaction_quality_check(path: Path, root: Path) -> tuple[list[str], list[str]]:
+    probe = r"""
+async () => {
+  const errors = [];
+  const warnings = [];
+  const wait = () => new Promise((resolve) => setTimeout(resolve, 80));
+  const visible = (el) => {
+    if (!el) return false;
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const text = (el) => (el && el.innerText ? el.innerText.replace(/\s+/g, ' ').trim() : '');
+  const closeOpenPanels = async () => {
+    const close = document.querySelector('[data-close],.close-drawer,[aria-label*="关闭"],[aria-label*="Close"]');
+    if (close) close.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+    await wait();
+  };
+
+  const panelSelector = '#term-panel[aria-hidden="false"],#term-popover[aria-hidden="false"],.term-popover[aria-hidden="false"],.term-drawer[aria-hidden="false"],[data-term-panel][aria-hidden="false"],dialog[open]';
+  const termButtons = Array.from(document.querySelectorAll('.term[data-term],[data-term-id],[data-open-drawer="term"]')).filter(visible);
+  for (const termButton of termButtons.slice(0, 12)) {
+    await closeOpenPanels();
+    const block = termButton.closest('.reading-block,[data-source-id]');
+    termButton.scrollIntoView({block: 'center', inline: 'nearest'});
+    await wait();
+    termButton.click();
+    await wait();
+    const panel = document.querySelector(panelSelector);
+    if (!panel || !visible(panel)) continue;
+    const blockRect = block ? block.getBoundingClientRect() : null;
+    if (blockRect) {
+      const panelRect = panel.getBoundingClientRect();
+      const overlapX = Math.max(0, Math.min(blockRect.right, panelRect.right) - Math.max(blockRect.left, panelRect.left));
+      const overlapY = Math.max(0, Math.min(blockRect.bottom, panelRect.bottom) - Math.max(blockRect.top, panelRect.top));
+      const ratio = (overlapX * overlapY) / Math.max(1, blockRect.width * blockRect.height);
+      if (ratio > 0.55) {
+        const termId = termButton.dataset.term || termButton.dataset.termId || termButton.textContent.trim();
+        errors.push(`mobile term '${termId}' panel overlaps the active reading block by ${Math.round(ratio * 100)}%`);
+      }
+    }
+  }
+  await closeOpenPanels();
+
+  const sideNote = document.querySelector('#side-note,[data-side-note]');
+  const readingBlocks = Array.from(document.querySelectorAll('.reading-block,[data-source-id]')).filter(visible);
+  if (sideNote && readingBlocks.length >= 2) {
+    const before = text(sideNote);
+    readingBlocks[1].scrollIntoView({block: 'center', inline: 'nearest'});
+    readingBlocks[1].click();
+    await wait();
+    const after = text(sideNote);
+    if (before && after && before === after) {
+      errors.push('side note does not change after focusing a different reading block');
+    }
+  }
+
+  const reviewChoice = Array.from(document.querySelectorAll('[data-review-choice],[data-quiz-choice]')).find(visible);
+  if (reviewChoice) {
+    reviewChoice.scrollIntoView({block: 'center', inline: 'nearest'});
+    await wait();
+    reviewChoice.click();
+    await wait();
+    const card = reviewChoice.closest('[data-review],.review-card,[data-quiz],.quiz-card');
+    const feedback = card ? card.querySelector('.review-feedback,[data-review-feedback],.quiz-feedback,[aria-live]') : null;
+    const link = feedback ? feedback.querySelector('a[href^="#"]') : null;
+    if (!feedback || text(feedback).length < 16) {
+      errors.push('chapter review feedback is empty or too weak on mobile');
+    } else if (!link || !/回到原文|证据|source/i.test(text(link))) {
+      errors.push('chapter review feedback needs a visible return-to-evidence link');
+    }
+  }
+
+  return {errors, warnings};
+}
+"""
+    metrics, error = run_playwright_probe(
+        path,
+        root,
+        {"width": 390, "height": 844},
+        probe,
+        strip_scripts=False,
+        wait_ms=900,
+        timeout=75,
+    )
+    if metrics is not None:
+        return analyze_interaction_metrics(path, metrics)
+    return [], [f"{path}: mobile interaction quality check skipped: {error}"]
+
+
 PRODUCTION_TEXT_PATTERNS = [
     (r"面向无专业背景大学生", "audience-targeting note"),
     (r"生成教学图资产", "generated asset label"),
@@ -1178,6 +1269,7 @@ PRODUCTION_TEXT_PATTERNS = [
     (r"哪些结论只是局部实验下成立", "internal reviewer prompt in side note"),
     (r"检查作者是否|需要验证|审稿时|作为审查|回归样本|测试样本|验收时", "internal reviewer or QA phrasing"),
     (r"本轮|这轮|上一版|当前版本|交付前|子 ?agent|subagent", "iteration/process phrasing"),
+    (r"章节小测|小测|测一下这章", "quiz-like public label; use chapter core recap wording"),
     (r"待补|占位|coming soon|undefined|null", "placeholder text"),
 ]
 
@@ -1512,8 +1604,9 @@ def audit_html(
             errors.append(f"{path}: manifest says only {rendered_figures}/{expected_figures} paper figures/tables rendered")
         if isinstance(expected_visuals, int) and isinstance(rendered_visuals, int) and rendered_visuals < expected_visuals:
             errors.append(f"{path}: manifest says only {rendered_visuals}/{expected_visuals} generated visuals rendered")
-        if strict and expected_visuals and not re.search(r"image\s*2|gpt-image|gpt\s*image|image[-\s]*generation|imagegen|dall-?e|imagen", image_model, re.I):
-            errors.append(f"{path}: manifest does not record an Image 2/image-generation model for generated visuals")
+        image2_pattern = r"image\s*2|gpt[-\s]*image[-\s]*2|gpt\s*image\s*2"
+        if strict and expected_visuals and not re.search(image2_pattern, image_model, re.I):
+            errors.append(f"{path}: manifest does not clearly record Image 2/gpt-image-2 for generated visuals")
         if strict:
             for field_name, value in (
                 ("source_language", source_language),
@@ -1558,8 +1651,14 @@ def audit_html(
                     errors.append(f"{path}: layout_strategy.desktop_first_viewport_checked must be true after browser review")
                 if layout_strategy.get("mobile_layout_checked") is not True:
                     errors.append(f"{path}: layout_strategy.mobile_layout_checked must be true after responsive review")
+                if layout_strategy.get("mobile_dynamic_interactions_checked") is not True:
+                    errors.append(f"{path}: layout_strategy.mobile_dynamic_interactions_checked must be true after mobile term/review/side-note tests")
                 if layout_strategy.get("term_panel_non_overlap_checked") is not True:
                     errors.append(f"{path}: layout_strategy.term_panel_non_overlap_checked must be true after testing term panels")
+                if layout_strategy.get("side_note_sync_checked") is not True:
+                    errors.append(f"{path}: layout_strategy.side_note_sync_checked must be true after testing active paragraph notes")
+                if layout_strategy.get("review_return_to_evidence_checked") is not True:
+                    errors.append(f"{path}: layout_strategy.review_return_to_evidence_checked must be true after testing chapter recap evidence links")
                 if layout_strategy.get("empty_state_switching_checked") is not True:
                     errors.append(f"{path}: layout_strategy.empty_state_switching_checked must be true after chapter/question/language switching tests")
             if not isinstance(visual_readability_checks, dict) or not visual_readability_checks:
@@ -1613,6 +1712,7 @@ def audit_html(
                     "figure_hotspots",
                     "formula_breakdowns",
                     "comparison_tables",
+                    "chapter_reviews",
                     "chapter_quizzes",
                     "knowledge_map",
                     "method_chats",
@@ -1760,8 +1860,26 @@ def audit_html(
                 for index, item in enumerate(generated_visuals, start=1):
                     if not isinstance(item, dict):
                         continue
-                    if not (item.get("model_name") or item.get("tool") or image_model):
+                    item_model = str(item.get("model_name") or item.get("tool") or image_model or "")
+                    if not item_model:
                         errors.append(f"{path}: generated visual #{index} must record model_name/tool")
+                    elif strict and not re.search(image2_pattern, item_model, re.I):
+                        errors.append(f"{path}: generated visual #{index} must record Image 2/gpt-image-2 provenance, not '{item_model}'")
+                    visual_path = str(item.get("path", "") or "")
+                    if not visual_path:
+                        errors.append(f"{path}: generated visual #{index} must record a local bitmap path")
+                    else:
+                        if re.search(r"\.svg(\?|#|$)", visual_path, re.I):
+                            errors.append(f"{path}: generated visual #{index} path is SVG; use a real Image 2 bitmap asset: {visual_path}")
+                        asset = (root / visual_path.split("#", 1)[0].split("?", 1)[0]).resolve()
+                        try:
+                            asset.relative_to(root.resolve())
+                        except ValueError:
+                            errors.append(f"{path}: generated visual #{index} path points outside site root: {visual_path}")
+                        if not asset.exists():
+                            errors.append(f"{path}: generated visual #{index} missing image asset: {visual_path}")
+                        if visual_path not in text:
+                            errors.append(f"{path}: generated visual #{index} path is not referenced in HTML: {visual_path}")
                     for key in ("teaches_concept", "reader_question", "why_image_needed"):
                         if not item.get(key):
                             errors.append(f"{path}: generated visual #{index} must record {key}")
@@ -1819,6 +1937,9 @@ def audit_html(
         errors.extend(render_errors)
         warnings.extend(render_warnings)
         render_errors, render_warnings = run_interaction_quality_check(path, root)
+        errors.extend(render_errors)
+        warnings.extend(render_warnings)
+        render_errors, render_warnings = run_mobile_interaction_quality_check(path, root)
         errors.extend(render_errors)
         warnings.extend(render_warnings)
     elif strict and skip_browser:

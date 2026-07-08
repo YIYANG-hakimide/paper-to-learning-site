@@ -1,6 +1,6 @@
 # Reader Runtime Contract
 
-Use this when implementing the static HTML reader. Prefer copying `assets/reader-runtime.js` into the output site or inlining it after the page data. It exists to prevent common failures: empty chapter tabs, broken language modes, term popovers covering the reading paragraph, figure drawers that are not actually larger, and repeated quiz feedback.
+Use this when implementing the static HTML reader. Prefer copying `assets/reader-runtime.js` into the output site or inlining it after the page data. It exists to prevent common failures: empty chapter tabs, broken language modes, term popovers covering the reading paragraph, figure drawers that are not actually larger, and repeated chapter-review feedback.
 
 ## Runtime data
 
@@ -28,16 +28,16 @@ window.LEARNING_SITE_FIGURES = {
     source_id: "res-01"
   }
 };
-window.LEARNING_SITE_QUIZ_FEEDBACK = {
+window.LEARNING_SITE_REVIEW_FEEDBACK = {
   "chapter-3": {
-    "baseline": "对：这题要回到 Table 2，看 Transformer big 与 ConvS2S 的 BLEU 和训练 FLOPs。",
-    "summary-only": "还不够：先说明比较对象、指标方向和限制，再说结论。"
+    "baseline": "核心回顾：这章要回到 Table 2，看 Transformer big 与 ConvS2S 的 BLEU 和训练 FLOPs。",
+    "summary-only": "再补一步：先说明比较对象、指标方向和限制，再说结论。"
   }
 };
 </script>
 ```
 
-Each quiz choice may also use `data-feedback` and `data-source-id`. Do not rely on generic fallback feedback.
+Each review choice may also use `data-feedback` and `data-source-id`. Do not rely on generic fallback feedback. Legacy `window.LEARNING_SITE_QUIZ_FEEDBACK`, `data-quiz`, and `data-quiz-choice` are still accepted for old sites, but new sites should use review/recap naming.
 
 ## DOM contract
 
@@ -51,6 +51,7 @@ Use these selectors:
 - inline terms: `.term[data-term]` or `[data-term-id]`, placed inside source/translation/explanation text
 - source figures/tables: `.source-figure[data-figure-id]` with a local `img`
 - figure triggers: `[data-figure]` or `[data-figure-id]`
+- chapter recap/review cards: `[data-review]` or `.review-card`, with choices using `[data-review-choice]`
 - close buttons: `[data-close]`, `[data-close-panel]`, or `.close-drawer`
 
 Do not bind chapter switching to all `[data-chapter]` elements. Reading blocks often carry `data-chapter` for coverage, but they are not navigation controls.
@@ -84,6 +85,19 @@ Figure panel must show a genuinely larger image than the inline thumbnail and ke
 </aside>
 ```
 
+Side note synchronization should use stable selectors. Each `.reading-block` should provide `data-note-title` and `data-note`, or an in-block `[data-note-title]` plus `[data-note-text]`. The side rail should expose `[data-side-note-title]`, `[data-side-note-text]`, and `[data-side-note-link]`:
+
+```html
+<aside id="side-note" data-side-note>
+  <h2>本段核心</h2>
+  <p data-side-note-title></p>
+  <p data-side-note-text></p>
+  <a data-side-note-link href="#">回到原文</a>
+</aside>
+```
+
+Clicking or focusing a different reading block must visibly update this note. Do not render a static-looking synchronized side note.
+
 ## Safe state rules
 
 - Use `panel.setAttribute("data-active", "true")` for the active chapter and `panel.removeAttribute("data-active")` for inactive panels.
@@ -96,8 +110,10 @@ Figure panel must show a genuinely larger image than the inline thumbnail and ke
 ```
 
 - Language mode should update `body[data-mode]` while keeping the active paragraph and side note.
-- Close/Escape must set `aria-expanded="false"` on the trigger and return focus to the source word, figure, or quiz.
+- Close/Escape must set `aria-expanded="false"` on the trigger and return focus to the source word, figure, or review control.
 - Term panels should not be centered modals on desktop. If a drawer is unavoidable, it must not cover more than a small part of the active reading block.
+- On mobile, prefer in-flow accordions or bottom sheets below half the viewport. Opening a term should keep the triggering sentence visible above the explanation.
+- Chapter recap/review feedback should append a visible `回到原文证据` link to the supporting reading block.
 
 ## Layout defaults
 
@@ -114,5 +130,7 @@ Before strict audit, manually test:
 2. Toggle every language mode and confirm source/chinese layers remain paired.
 3. Click at least five terms, close them, and confirm focus or scroll returns.
 4. Open every figure/table large view; the large view must be meaningfully larger than the inline image.
-5. Click every quiz choice; feedback must mention chapter-specific evidence or source ids.
-6. Search visible UI for internal words: `preflight`, `manifest`, `regression`, `source_id`, `stacked-bilingual`, `generated assets`, `面向无专业背景大学生`.
+5. Click every chapter-review choice; feedback must mention chapter-specific evidence or source ids.
+6. On mobile, open terms and confirm the explanation does not cover most of the active paragraph.
+7. Focus two different reading blocks and confirm the side note changes.
+8. Search visible UI for internal words: `preflight`, `manifest`, `regression`, `source_id`, `stacked-bilingual`, `generated assets`, `面向无专业背景大学生`.
