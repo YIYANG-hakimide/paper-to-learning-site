@@ -13,6 +13,7 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - In the first desktop viewport, can a reviewer see the paper title, language mode, chapter navigation, a real source paragraph, Chinese reading/explanation, and a side note or inline learning affordance?
    - Does the public UI avoid production/audience/process labels such as `面向无专业背景大学生`, `preflight`, `manifest`, `regression`, `生成教学图资产`, or `generated assets`?
    - Do side notes avoid internal reviewer copy such as `读后文时要一直追问`, `作者在哪里证明`, and `哪些结论只是局部实验下成立`?
+   - Are side notes specific to the active paragraph, without repeating generic template copy across many blocks?
    - Is there a visible language mode for non-Chinese sources?
    - Does it avoid generic AI/dashboard aesthetics?
    - Does it avoid plain gray/white three-column documentation styling unless the topic explicitly calls for it?
@@ -38,11 +39,13 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - Are terms introduced at the first point where they block comprehension, not later in a separate glossary?
    - Are explanations proportional to source difficulty, so long or dense English passages get more than one generic sentence?
    - Are chapter logic summaries and checkpoints useful?
+   - Does each chapter recap include a Feynman-style "用自己的话复述" scaffold, not only multiple-choice buttons?
    - Are diagrams used where text alone would be dry or abstract?
    - Does each generated diagram have a local teaching job: mechanism, comparison, example, timeline, evidence map, misconception, or "what happens next" bridge?
    - Are generated diagrams and source figures large enough to read, or split into smaller focused visuals?
    - Are formula/math sections broken into symbol meaning, ordinary-language role, and a tiny concrete example?
    - Are experiment/result sections written from the evidence outward: show the figure/table, teach how to read it, then state the conclusion?
+   - Does every improvement, efficiency, cost, latency, or quality claim record baseline, metric/dimension, direction/value, evidence, and limitation?
    - Do explanations teach reading strategy: what to inspect, what evidence supports the claim, and what not to over-read?
    - For Chinese-bilingual sites, are generated Image 2 diagrams Chinese-dominant, with English retained only as concise aliases for canonical terms?
 
@@ -60,6 +63,10 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - If a chart/table has been redrawn, are original values, order, axes, units, and uncertainty preserved and explained in HTML?
    - Are generated Image 2 diagrams embedded near the concept they teach, not collected as a public asset list?
    - Does `data/learning-site-manifest.json` record source block ids/hashes, chapter coverage, inline term anchors, figure/table links, generated visual language, and omissions with reasons?
+   - Does the manifest record `source_fidelity`, `claim_evidence_map`, `formula_breakdowns` when relevant, and exact term/figure return-link consistency?
+   - Does `source_fidelity` point to a real extraction inventory file and hash, rather than a self-reported sentence?
+   - Do claim evidence entries distinguish source claims to verify from supported conclusions, and avoid using generated visuals as proof?
+   - Do formula or algorithm breakdowns have visible DOM modules with symbol, step, and example sections?
    - Does the manifest record `layout_strategy`, `source_rendering_modes`, `source_screenshot_blocks`, and `interaction_inventory`?
    - Does public UI text, image alt text, `title`, and `aria-label` avoid production/process wording such as `Generated`, `生成教学图资产`, `prompt summary`, `image prompt`, `preflight`, `manifest`, `reader level`, or `面向无专业背景大学生`? Canonical source terms such as `prompt tuning` are allowed when the paper itself uses them.
 
@@ -78,6 +85,10 @@ When maintaining this skill or validating a high-risk site, run and record these
 9. Every chapter-review choice or problem tab produces meaningful feedback and a visible return-to-evidence path.
 10. Mobile dynamic interactions pass: term panel overlap, side-note sync, and review feedback link.
 11. Public copy scan passes for side notes, alt text, aria labels, and drawer labels.
+12. Claim/evidence traceability passes: strong result claims have a nearby evidence module and `claim_evidence_map` entry.
+13. Formula/algorithm traceability passes: each formula or pseudocode module has symbols, steps, and a concrete example.
+14. Chapter recap production passes: each chapter has a "用自己的话复述" scaffold with links back to evidence.
+15. Public UI copy passes: no `样例`, `demo`, `测试页`, raw source ids such as `lora01`, or audience/build-process wording appears to the reader.
 
 ## Novice-reader acceptance
 
@@ -94,6 +105,7 @@ Use this 10-point acceptance test after the three passes:
 9. Important conclusions link back to the source paragraph, figure/table, or experiment that supports them.
 10. Image 2 diagrams clarify mechanisms in Chinese-dominant visual language and do not expose generation workflow.
 11. The page feels like a crafted interactive article or reader product, not a summary page, admin dashboard, or build artifact list.
+12. A reader can explain the paper in five slots: problem, method, comparison, evidence, and limitation.
 
 ## Final acceptance
 

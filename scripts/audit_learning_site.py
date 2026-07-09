@@ -67,6 +67,7 @@ class SiteHTMLParser(HTMLParser):
         self.ids: list[str] = []
         self.images: list[tuple[str, str, int]] = []
         self.iframes: list[tuple[str, int]] = []
+        self.links: list[tuple[str, str, int]] = []
         self.buttons: list[tuple[dict[str, str], int]] = []
         self.starttags: list[tuple[str, dict[str, str], int]] = []
         self.class_counts: dict[str, int] = {}
@@ -78,9 +79,12 @@ class SiteHTMLParser(HTMLParser):
         self.aria_counts = {"expanded": 0, "controls": 0, "current": 0}
         self._current_button: dict[str, str] | None = None
         self._button_text: list[str] = []
+        self._current_link: dict[str, str] | None = None
+        self._link_text: list[str] = []
         self._class_stack: list[set[str]] = []
         self._text_collectors: list[dict[str, object]] = []
         self._reading_block_collectors: list[dict[str, object]] = []
+        self._term_collectors: list[dict[str, object]] = []
         self._skip_depth = 0
         self._line = 1
 
@@ -91,6 +95,8 @@ class SiteHTMLParser(HTMLParser):
             for collector in self._text_collectors:
                 collector["depth"] = int(collector["depth"]) + 1
             for collector in self._reading_block_collectors:
+                collector["depth"] = int(collector["depth"]) + 1
+            for collector in self._term_collectors:
                 collector["depth"] = int(collector["depth"]) + 1
         attr = {k: (v or "") for k, v in attrs}
         self._line = self.getpos()[0]
@@ -103,7 +109,7 @@ class SiteHTMLParser(HTMLParser):
         for aria_name in ("aria-expanded", "aria-controls", "aria-current"):
             if aria_name in attr:
                 self.aria_counts[aria_name.removeprefix("aria-")] += 1
-        for attr_name in ("alt", "title", "aria-label", "data-note"):
+        for attr_name in ("alt", "title", "aria-label", "data-note", "data-note-title"):
             if attr.get(attr_name, "").strip():
                 self.attr_texts.append((attr_name, attr[attr_name].strip(), self._line))
         if "id" in attr:
@@ -112,6 +118,9 @@ class SiteHTMLParser(HTMLParser):
             self.images.append((attr.get("src", ""), attr.get("alt", ""), self._line))
         if tag == "iframe":
             self.iframes.append((attr.get("src", ""), self._line))
+        if tag == "a":
+            self._current_link = attr
+            self._link_text = []
         if "reading-block" in classes:
             self._reading_block_collectors.append(
                 {
@@ -134,15 +143,29 @@ class SiteHTMLParser(HTMLParser):
             or attr.get("data-open-drawer", "").lower() == "term"
         )
         if is_term:
-            self.term_records.append(
-                {
-                    "line": self._line,
-                    "classes": sorted(classes),
-                    "inline": bool(all_context_classes & self.TEXT_FLOW_CLASSES) and not bool(all_context_classes & self.DETACHED_TERM_CLASSES),
-                    "detached": bool(all_context_classes & self.DETACHED_TERM_CLASSES),
-                    "has_aria": any(name in attr for name in ("aria-expanded", "aria-controls", "aria-label")),
-                }
-            )
+            current_source_id = ""
+            current_block_id = ""
+            if self._reading_block_collectors:
+                current_block = self._reading_block_collectors[-1]
+                current_source_id = str(current_block.get("data_source_id", "") or "")
+                current_block_id = str(current_block.get("id", "") or "")
+            record = {
+                "line": self._line,
+                "classes": sorted(classes),
+                "term_id": attr.get("data-term") or attr.get("data-term-id") or attr.get("data-open-drawer", ""),
+                "source_id": current_source_id,
+                "rendered_block_id": current_block_id,
+                "inline": bool(all_context_classes & self.TEXT_FLOW_CLASSES) and not bool(all_context_classes & self.DETACHED_TERM_CLASSES),
+                "detached": bool(all_context_classes & self.DETACHED_TERM_CLASSES),
+                "has_aria": any(name in attr for name in ("aria-expanded", "aria-controls", "aria-label")),
+                "parts": [],
+            }
+            if is_void:
+                record["trigger_text"] = attr.get("aria-label") or attr.get("title") or ""
+                self.term_records.append(record)
+            else:
+                record["depth"] = 1
+                self._term_collectors.append(record)
         for class_name in classes & self.TEXT_COLLECT_CLASSES:
             if is_void:
                 continue
@@ -156,6 +179,13 @@ class SiteHTMLParser(HTMLParser):
             self._class_stack.append(classes)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self._current_link is not None:
+            attrs = dict(self._current_link)
+            href = attrs.get("href", "")
+            label = " ".join("".join(self._link_text).split())
+            self.links.append((href, label, self.getpos()[0]))
+            self._current_link = None
+            self._link_text = []
         if tag == "button" and self._current_button is not None:
             attrs = dict(self._current_button)
             attrs["_text"] = " ".join("".join(self._button_text).split())
@@ -194,6 +224,20 @@ class SiteHTMLParser(HTMLParser):
                 }
                 self.reading_blocks.append(block)
                 self._reading_block_collectors.remove(collector)
+        finished_terms: list[dict[str, object]] = []
+        for collector in self._term_collectors:
+            collector["depth"] = int(collector["depth"]) - 1
+            if int(collector["depth"]) <= 0:
+                finished_terms.append(collector)
+        if finished_terms:
+            for collector in finished_terms:
+                parts = collector.get("parts")
+                trigger_text = " ".join("".join(parts if isinstance(parts, list) else []).split())
+                collector["trigger_text"] = trigger_text
+                collector.pop("parts", None)
+                collector.pop("depth", None)
+                self.term_records.append(collector)
+                self._term_collectors.remove(collector)
         if tag.lower() in {"script", "style", "noscript", "svg"} and self._skip_depth:
             self._skip_depth -= 1
         if self._class_stack:
@@ -224,8 +268,14 @@ class SiteHTMLParser(HTMLParser):
                     plain_parts = collector["plain_parts"]
                     if isinstance(plain_parts, list):
                         plain_parts.append(data)
+            for collector in self._term_collectors:
+                parts = collector.get("parts")
+                if isinstance(parts, list):
+                    parts.append(data)
         if self._current_button is not None:
             self._button_text.append(data)
+        if self._current_link is not None:
+            self._link_text.append(data)
 
     @property
     def visible_text(self) -> str:
@@ -537,6 +587,7 @@ def analyze_desktop_first_viewport_metrics(path: Path, metrics: dict[str, object
         "chapterNav": "chapter navigation",
         "sourceText": "real source paragraph",
         "chineseReading": "Chinese translation/explanation",
+        "visualLandmark": "paper-specific visual landmark or teaching image",
         "learningAffordance": "inline term, evidence, side note, or learning affordance",
     }
     for key, label in required.items():
@@ -755,13 +806,18 @@ def run_desktop_first_viewport_check(path: Path, root: Path) -> tuple[list[str],
     languageMode: '.language-mode,.language-toggle,.lang-toggle,.mode-toggle,.segmented-language,[data-language-mode]',
     sourceText: '.source-text,.source-paragraph,[data-source-id]',
     chineseReading: '.translation-text,.plain-text,.chinese-reading,.cn-reading',
+    visualLandmark: '.visual-landmark,.paper-visual-landmark,.diagram-card img,.source-figure img,.hero-visual img,[data-visual-landmark]',
     learningAffordance: '.term,[data-term],[data-term-id],.figure-note,.figure-explanation,.source-figure-note,.marginalia,.side-note,[data-open-drawer],.term-popover'
   };
   const visible = {};
   for (const [key, selector] of Object.entries(groups)) {
     visible[key] = Array.from(document.querySelectorAll(selector)).some((el) => {
       const rect = el.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+      const inViewport = rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+      if (key === 'visualLandmark') {
+        return inViewport && rect.width >= 180 && rect.height >= 100;
+      }
+      return inViewport;
     });
   }
   const offenders = [];
@@ -816,13 +872,18 @@ setTimeout(() => {
     languageMode: '.language-mode,.language-toggle,.lang-toggle,.mode-toggle,.segmented-language,[data-language-mode]',
     sourceText: '.source-text,.source-paragraph,[data-source-id]',
     chineseReading: '.translation-text,.plain-text,.chinese-reading,.cn-reading',
+    visualLandmark: '.visual-landmark,.paper-visual-landmark,.diagram-card img,.source-figure img,.hero-visual img,[data-visual-landmark]',
     learningAffordance: '.term,[data-term],[data-term-id],.figure-note,.figure-explanation,.source-figure-note,.marginalia,.side-note,[data-open-drawer],.term-popover'
   };
   const visible = {};
   for (const [key, selector] of Object.entries(groups)) {
     visible[key] = Array.from(document.querySelectorAll(selector)).some((el) => {
       const rect = el.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+      const inViewport = rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+      if (key === 'visualLandmark') {
+        return inViewport && rect.width >= 180 && rect.height >= 100;
+      }
+      return inViewport;
     });
   }
   const offenders = [];
@@ -1240,7 +1301,7 @@ async () => {
     )
     if metrics is not None:
         return analyze_interaction_metrics(path, metrics)
-    return [], [f"{path}: mobile interaction quality check skipped: {error}"]
+    return [f"{path}: mobile interaction quality check skipped or failed; strict audits must not waive dynamic mobile QA: {error}"], []
 
 
 PRODUCTION_TEXT_PATTERNS = [
@@ -1255,6 +1316,8 @@ PRODUCTION_TEXT_PATTERNS = [
     (r"\bpreflight\b", "preflight/internal workflow label"),
     (r"\bregression(?: slice)?\b", "regression/internal test label"),
     (r"\breader level\b", "reader-level internal label"),
+    (r"阅读样例|页面样例|示例页面|测试页|demo|fixture", "sample/demo label in public UI"),
+    (r"面向初学者", "audience-targeting note"),
     (r"\bprompt_summary\b", "prompt summary label"),
     (r"\bstacked-bilingual\b", "source rendering mode leaked to public UI"),
     (r"\bparallel-bilingual\b", "source rendering mode leaked to public UI"),
@@ -1264,6 +1327,7 @@ PRODUCTION_TEXT_PATTERNS = [
     (r"\bsource[_ -]?id\b", "source id implementation label"),
     (r"\bsource block\b", "source block implementation label"),
     (r"\b(?:abs|intro|bg|arch|enc|dec|emb|sdp|mh|why|train|res|var|parse|concl|code|app|sec|source)[-_][0-9]{1,3}\b", "raw source anchor id"),
+    (r"\b[a-z]{2,12}0[0-9]{1,3}\b", "raw source anchor id"),
     (r"读后文时要一直追问", "internal reviewer prompt in side note"),
     (r"作者在哪里证明", "internal reviewer prompt in side note"),
     (r"哪些结论只是局部实验下成立", "internal reviewer prompt in side note"),
@@ -1284,6 +1348,52 @@ def normalized_text(value: str) -> str:
 
 def normalized_sha256(value: str) -> str:
     return "sha256:" + hashlib.sha256(normalized_text(value).encode("utf-8")).hexdigest()
+
+
+def extract_window_json(text: str, var_name: str) -> object | None:
+    marker = f"window.{var_name}"
+    marker_pos = text.find(marker)
+    if marker_pos < 0:
+        return None
+    equals_pos = text.find("=", marker_pos)
+    if equals_pos < 0:
+        return None
+    payload = text[equals_pos + 1 :].lstrip()
+    try:
+        value, _end = json.JSONDecoder().raw_decode(payload)
+    except Exception:
+        return None
+    return value
+
+
+def source_order_map(parser: SiteHTMLParser) -> dict[str, int]:
+    order: dict[str, int] = {}
+    for index, block in enumerate(parser.reading_blocks):
+        source_id = str(block.get("data_source_id") or "")
+        if source_id and source_id not in order:
+            order[source_id] = index
+    return order
+
+
+def rendered_block_id_to_source_id(parser: SiteHTMLParser) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for block in parser.reading_blocks:
+        rendered_id = str(block.get("id") or "")
+        source_id = str(block.get("data_source_id") or "")
+        if rendered_id and source_id:
+            mapping[rendered_id] = source_id
+    return mapping
+
+
+def file_sha256(path: Path) -> str | None:
+    try:
+        digest = hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return "sha256:" + digest.hexdigest()
+    except Exception:
+        return None
 
 
 def explanation_length(value: str) -> int:
@@ -1349,6 +1459,15 @@ def audit_html(
     source_texts = parser.class_texts.get("source-text", [])
     translation_texts = parser.class_texts.get("translation-text", [])
     plain_texts = parser.class_texts.get("plain-text", [])
+    source_order = source_order_map(parser)
+    block_id_to_source = rendered_block_id_to_source_id(parser)
+    dom_blocks_by_source_global = {
+        str(block.get("data_source_id")): block
+        for block in parser.reading_blocks
+        if block.get("data_source_id")
+    }
+    runtime_terms = extract_window_json(text, "LEARNING_SITE_TERMS")
+    runtime_figures = extract_window_json(text, "LEARNING_SITE_FIGURES")
     source_count = max(source_count, len(source_texts))
     translation_count = max(translation_count, len(translation_texts))
     plain_count = max(plain_count, len(plain_texts))
@@ -1490,6 +1609,29 @@ def audit_html(
                     errors.append(f"{path}:{line}: public {attr_name} exposes internal production text ({label})")
         if marginalia_text and re.search(r"资产|生成教学图|manifest|preflight|regression|generated assets?", marginalia_text, re.I):
             errors.append(f"{path}: marginalia/side notes expose production or asset-management language")
+        side_note_values = [
+            compact_text(str(block.get("data_note") or ""))
+            for block in parser.reading_blocks
+            if str(block.get("data_note") or "").strip()
+        ]
+        generic_side_note_patterns = [
+            r"这一段正在推进本章主线",
+            r"先看原文提出的动作或结论",
+            r"确认它和方法、证据或限制的关系",
+            r"本段主要讲这一章的核心内容",
+        ]
+        for note in side_note_values:
+            if any(re.search(pattern, note) for pattern in generic_side_note_patterns):
+                errors.append(f"{path}: side note copy is templated instead of paragraph-specific teaching copy: {note[:80]}")
+                break
+        repeated_notes = {
+            note: side_note_values.count(note)
+            for note in set(side_note_values)
+            if note and side_note_values.count(note) >= 3
+        }
+        if repeated_notes:
+            note, count = sorted(repeated_notes.items(), key=lambda item: item[1], reverse=True)[0]
+            errors.append(f"{path}: side note repeats the same copy {count} times; make notes specific to each paragraph: {note[:80]}")
         missing_source_ids = [
             str(item.get("data_block") or item.get("id") or item.get("line"))
             for item in parser.reading_blocks
@@ -1596,6 +1738,13 @@ def audit_html(
         source_rendering_modes = manifest.get("source_rendering_modes")
         source_screenshot_blocks = manifest.get("source_screenshot_blocks")
         interaction_inventory = manifest.get("interaction_inventory")
+        term_explanations = manifest.get("term_explanations")
+        source_fidelity = manifest.get("source_fidelity")
+        claim_evidence_map = manifest.get("claim_evidence_map")
+        formula_breakdowns = manifest.get("formula_breakdowns")
+        first_viewport_landmarks = manifest.get("first_viewport_landmarks")
+        section_map = manifest.get("section_map")
+        chapter_landmarks = manifest.get("chapter_landmarks")
         if expected_source_blocks is not None and not isinstance(expected_source, int):
             expected_source = expected_source_blocks
         if isinstance(expected_source, int) and isinstance(rendered_source, int) and rendered_source < expected_source:
@@ -1637,13 +1786,27 @@ def audit_html(
             if not isinstance(design_brief, dict) or not design_brief:
                 errors.append(f"{path}: manifest needs design_brief with paper-specific visual direction and typography/layout choices")
             else:
-                required_design_keys = {"visual_direction", "topic_motif", "typography_plan", "why_not_generic"}
+                required_design_keys = {
+                    "visual_direction",
+                    "topic_motif",
+                    "typography_plan",
+                    "first_viewport_visual_landmark",
+                    "component_rhythm_plan",
+                    "evidence_first_plan",
+                    "why_not_generic",
+                    "paper_artifact_cues",
+                    "layout_rhythm_by_chapter",
+                    "visual_motif_applied_to_header",
+                    "what_must_not_reuse_from_default_template",
+                }
                 missing_design_keys = sorted(required_design_keys - set(str(key) for key in design_brief.keys()))
                 if missing_design_keys:
                     errors.append(f"{path}: design_brief missing keys: {', '.join(missing_design_keys)}")
                 design_text = " ".join(str(value) for value in design_brief.values()).lower()
                 if re.search(r"\bdashboard\b|generic|ai gradient|模板|通用", design_text):
                     warnings.append(f"{path}: design_brief sounds generic; explain the paper-specific visual system")
+                if re.search(r"same card|identical card|all cards|单一卡片|同一种卡片|一套卡片", design_text, re.I):
+                    errors.append(f"{path}: design_brief admits one-template card rhythm; use different forms for prose, methods, figures, experiments, and review")
             if not isinstance(layout_strategy, dict) or not layout_strategy.get("summary"):
                 errors.append(f"{path}: manifest needs layout_strategy.summary explaining why this reading layout fits the paper")
             else:
@@ -1676,6 +1839,35 @@ def audit_html(
                 errors.append(f"{path}: manifest needs source_rendering_modes[] such as parallel-bilingual, stacked-bilingual, interleaved-close-reading, figure-led")
             elif isinstance(expected_source, int) and expected_source >= 20 and len(set(map(str, source_rendering_modes))) == 1:
                 warnings.append(f"{path}: only one source rendering mode recorded for a long paper; confirm the layout is not a one-template reader")
+            rendered_layout_modes = {
+                attrs.get("data-layout") or attrs.get("data-rendering-mode")
+                for _tag, attrs, _line in parser.starttags
+                if attrs.get("data-layout") or attrs.get("data-rendering-mode")
+            }
+            if source_rendering_modes and not rendered_layout_modes:
+                errors.append(f"{path}: source_rendering_modes are recorded but not reflected in DOM data-layout/data-rendering-mode attributes")
+            elif isinstance(source_rendering_modes, list):
+                missing_rendered_modes = sorted(set(map(str, source_rendering_modes)) - set(map(str, rendered_layout_modes)))
+                if missing_rendered_modes:
+                    errors.append(f"{path}: source_rendering_modes not represented in DOM data-layout/data-rendering-mode: {', '.join(missing_rendered_modes)}")
+            if not isinstance(first_viewport_landmarks, list) or not first_viewport_landmarks:
+                errors.append(f"{path}: manifest needs first_viewport_landmarks[] describing the visible paper-specific first-screen teaching object")
+            else:
+                for index, item in enumerate(first_viewport_landmarks, start=1):
+                    if not isinstance(item, dict):
+                        errors.append(f"{path}: first_viewport_landmarks[{index}] must be an object")
+                        continue
+                    missing = [key for key in ("selector", "source_ids", "why_this_is_paper_specific") if not item.get(key)]
+                    if missing:
+                        errors.append(f"{path}: first_viewport_landmarks[{index}] missing: {', '.join(missing)}")
+                    landmark_path = str(item.get("path", "") or "")
+                    if landmark_path and landmark_path not in text:
+                        errors.append(f"{path}: first_viewport_landmarks[{index}] path is not referenced in HTML: {landmark_path}")
+            if isinstance(expected_source, int) and expected_source >= 20:
+                if not isinstance(section_map, list) or not section_map:
+                    errors.append(f"{path}: long papers need section_map[] so the reader is not a flat chapter list")
+                if not isinstance(chapter_landmarks, list) or not chapter_landmarks:
+                    errors.append(f"{path}: long papers need chapter_landmarks[] with visual/evidence anchors for navigation")
             if source_screenshot_blocks is None:
                 errors.append(f"{path}: manifest needs source_screenshot_blocks[]; use [] when no original-text facsimile screenshots are rendered")
             elif not isinstance(source_screenshot_blocks, list):
@@ -1726,6 +1918,16 @@ def audit_html(
                         has_learning_action = True
                 if not has_learning_action:
                     errors.append(f"{path}: interaction_inventory needs at least one non-decorative learning action beyond passive text/terms")
+                feynman_value = interaction_inventory.get("feynman_recaps") or interaction_inventory.get("feynman_scaffolds")
+                has_feynman_inventory = bool(
+                    feynman_value is True
+                    or (isinstance(feynman_value, (int, float)) and feynman_value > 0)
+                    or (isinstance(feynman_value, list) and feynman_value)
+                )
+                has_visible_feynman = bool(re.search(r"用自己的话|复述|问题是什么|方法怎么做|证据是什么|不能推出什么", visible_text))
+                has_review_cards = any(name in parser.class_counts for name in ("review-card", "quiz-card")) or "[data-review" in text
+                if has_review_cards and not (has_feynman_inventory and has_visible_feynman):
+                    errors.append(f"{path}: chapter recap needs a Feynman-style scaffold, not only choice buttons")
                 tested_controls = interaction_inventory.get("tested_controls")
                 if not isinstance(tested_controls, list) or not tested_controls:
                     errors.append(f"{path}: interaction_inventory needs tested_controls[] with trigger, state_change, close_method, and linked_source_ids")
@@ -1742,6 +1944,31 @@ def audit_html(
                             errors.append(f"{path}: tested_controls[{index}] for term interaction needs return_path")
                         if "term" in trigger_text and item.get("non_overlap_checked") is not True:
                             errors.append(f"{path}: tested_controls[{index}] for term interaction needs non_overlap_checked=true")
+            if not isinstance(source_fidelity, dict) or not source_fidelity:
+                errors.append(f"{path}: manifest needs source_fidelity with extraction artifact and paragraph alignment evidence")
+            else:
+                inventory_path = str(source_fidelity.get("extraction_inventory_path") or source_fidelity.get("source_inventory_path") or "")
+                inventory_hash = str(source_fidelity.get("extraction_inventory_sha256") or source_fidelity.get("source_inventory_sha256") or "")
+                if not inventory_path:
+                    errors.append(f"{path}: source_fidelity needs extraction_inventory_path/source_inventory_path")
+                else:
+                    inventory_asset = (root / inventory_path.split("#", 1)[0].split("?", 1)[0]).resolve()
+                    try:
+                        inventory_asset.relative_to(root.resolve())
+                    except ValueError:
+                        errors.append(f"{path}: source_fidelity inventory path points outside site root: {inventory_path}")
+                    if not inventory_asset.exists():
+                        errors.append(f"{path}: source_fidelity inventory asset is missing: {inventory_path}")
+                    elif inventory_hash:
+                        actual_hash = file_sha256(inventory_asset)
+                        if actual_hash and actual_hash != inventory_hash:
+                            errors.append(f"{path}: source_fidelity inventory hash mismatch for {inventory_path}")
+                    elif strict:
+                        errors.append(f"{path}: source_fidelity needs extraction_inventory_sha256/source_inventory_sha256")
+                if str(source_fidelity.get("source_format", "")).lower() == "pdf" and not source_fidelity.get("source_pdf_sha256"):
+                    errors.append(f"{path}: PDF source_fidelity needs source_pdf_sha256")
+                if source_fidelity.get("paragraph_alignment_checked") is not True:
+                    errors.append(f"{path}: source_fidelity.paragraph_alignment_checked must be true after matching rendered paragraphs to extracted source")
             if not isinstance(source_blocks, list) or not source_blocks:
                 errors.append(f"{path}: manifest needs source_blocks[] with per-paragraph ids/hashes, not only total source paragraph counts")
             if not isinstance(chapter_coverage, list) or not chapter_coverage:
@@ -1762,11 +1989,7 @@ def audit_html(
                         if missing_rendered:
                             errors.append(f"{path}: chapter_coverage[{index}] did not render expected source ids: {', '.join(missing_rendered[:5])}")
             if isinstance(source_blocks, list):
-                dom_blocks_by_source = {
-                    str(block.get("data_source_id")): block
-                    for block in parser.reading_blocks
-                    if block.get("data_source_id")
-                }
+                dom_blocks_by_source = dict(dom_blocks_by_source_global)
                 missing_render_refs = []
                 missing_hash_or_snippet = []
                 hash_mismatches = []
@@ -1823,12 +2046,161 @@ def audit_html(
                             errors.append(f"{path}: term_anchors[{index}] source_id not found in reading blocks: {source_id}")
                         elif trigger_text and dom_block and trigger_text not in str(dom_block.get("text") or ""):
                             errors.append(f"{path}: term_anchors[{index}] trigger_text is not found inside its reading block: {trigger_text[:40]}")
-                term_explanations = manifest.get("term_explanations")
+                    anchors_by_term: dict[str, set[str]] = {}
+                    for item in term_anchors:
+                        if not isinstance(item, dict):
+                            continue
+                        anchors_by_term.setdefault(str(item.get("term_id", "")), set()).add(str(item.get("source_id", "")))
+                    runtime_terms_dict = runtime_terms if isinstance(runtime_terms, dict) else {}
+                    explanation_dict = term_explanations if isinstance(term_explanations, dict) else {}
+                    for record in parser.term_records:
+                        term_id = str(record.get("term_id") or "")
+                        source_id = str(record.get("source_id") or "")
+                        trigger_text = str(record.get("trigger_text") or term_id)
+                        if not term_id or not source_id or record.get("detached"):
+                            continue
+                        if isinstance(term_anchors, list) and source_id not in anchors_by_term.get(term_id, set()):
+                            errors.append(f"{path}: inline term '{term_id}' appears in {source_id} but manifest anchors point elsewhere")
+                        runtime_record = runtime_terms_dict.get(term_id) if isinstance(runtime_terms_dict, dict) else None
+                        if isinstance(runtime_record, dict):
+                            runtime_sources = {
+                                str(runtime_record.get("source_id") or ""),
+                                *[str(item) for item in runtime_record.get("linked_source_ids", []) if item],
+                            }
+                            if source_id not in runtime_sources:
+                                errors.append(f"{path}: inline term '{term_id}' runtime source_id does not match trigger paragraph {source_id}")
+                        explanation_record = explanation_dict.get(term_id) if isinstance(explanation_dict, dict) else None
+                        if isinstance(explanation_record, dict):
+                            explanation_sources = {str(item) for item in explanation_record.get("linked_source_ids", [])}
+                            if explanation_sources and source_id not in explanation_sources:
+                                errors.append(f"{path}: inline term '{term_id}' explanation linked_source_ids do not include trigger paragraph {source_id}")
                 if not isinstance(term_explanations, (list, dict)) or not term_explanations:
                     errors.append(f"{path}: manifest needs term_explanations with per-term definition/plain/paper-use/misread coverage")
+                high_risk_terms = [
+                    "gradient",
+                    "objective function",
+                    "parameter",
+                    "learning rate",
+                    "attention",
+                    "transformer",
+                    "projection",
+                    "baseline",
+                    "metric",
+                    "epsilon",
+                    "ablation",
+                    "supervised fine-tuning",
+                    "rejection sampling",
+                ]
+                anchored_text = " ".join(str(record.get("trigger_text") or "") for record in parser.term_records).lower()
+                explained_text = json.dumps(term_explanations, ensure_ascii=False).lower() if isinstance(term_explanations, (dict, list)) else ""
+                for term in high_risk_terms:
+                    if re.search(rf"\b{re.escape(term)}\b", public_text_for_scan, re.I) and term.lower() not in anchored_text and term.lower() not in explained_text:
+                        warnings.append(f"{path}: high-risk novice term appears without inline explanation coverage: {term}")
             term_strip_only_count = manifest.get("term_strip_only_count")
             if isinstance(term_strip_only_count, int) and term_strip_only_count > 0:
                 errors.append(f"{path}: manifest reports {term_strip_only_count} terms that only exist in detached strips")
+            strong_claim_pattern = (
+                r"\b(improves?|improved|outperform(?:s|ed)?|competitive|match(?:es|ed)?|exceed(?:s|ed)?|"
+                r"better|best|reduce(?:s|d)?|lower (?:cost|latency|memory|loss|error|requirement)|fewer|less|efficient|efficiency|faster|preserve(?:s|d)? performance|"
+                r"cost|latency|memory requirement)\b|更好|提升|超过|优于|竞争力|更快|成本低|减少|降低|节省|更省|高效|效果|性能"
+            )
+            strong_claim_blocks = [
+                block
+                for block in parser.reading_blocks
+                if block.get("data_source_id") and re.search(strong_claim_pattern, str(block.get("text") or ""), re.I)
+            ]
+            strong_claim_source_ids = [
+                str(block.get("data_source_id") or "")
+                for block in strong_claim_blocks
+            ]
+            if strong_claim_source_ids:
+                if not isinstance(claim_evidence_map, list) or not claim_evidence_map:
+                    errors.append(f"{path}: strong result/efficiency claims need claim_evidence_map with baseline, metric/dimension, evidence, and limitation")
+                else:
+                    source_evidence_kinds = {"source_figure", "source_table", "source_paragraph", "source_experiment", "source_formula", "source_algorithm"}
+                    evidence_dom_ids = {
+                        attrs.get("data-evidence-id") or attrs.get("data-figure-id") or attrs.get("id")
+                        for _tag, attrs, _line in parser.starttags
+                        if attrs.get("data-evidence-id") or attrs.get("data-figure-id") or attrs.get("data-formula-breakdown") or attrs.get("id")
+                    }
+                    evidence_dom_ids = {str(item) for item in evidence_dom_ids if item}
+                    evidence_dom_ids.update(source_order.keys())
+                    claim_dom_ids = {
+                        value
+                        for _tag, attrs, _line in parser.starttags
+                        for value in (attrs.get("data-claim-id"), attrs.get("id"))
+                        if value
+                    }
+                    claim_dom_ids = {str(item) for item in claim_dom_ids if item}
+                    covered_claim_sources: set[str] = set()
+                    for index, item in enumerate(claim_evidence_map, start=1):
+                        if not isinstance(item, dict):
+                            errors.append(f"{path}: claim_evidence_map[{index}] must be an object")
+                            continue
+                        source_ids = {str(value) for value in item.get("source_ids", [])}
+                        source_ids.update(str(value) for value in item.get("linked_source_ids", []))
+                        covered_claim_sources.update(source_ids)
+                        required_claim_fields = {
+                            "claim_id",
+                            "claim_role",
+                            "source_ids",
+                            "comparison_baseline",
+                            "metric_or_dimension",
+                            "direction_or_value",
+                            "limitation",
+                            "evidence_items",
+                        }
+                        missing = sorted(field for field in required_claim_fields if not item.get(field))
+                        if missing:
+                            errors.append(f"{path}: claim_evidence_map[{index}] missing fields: {', '.join(missing)}")
+                        claim_role = str(item.get("claim_role") or "")
+                        if claim_role not in {"source_claim_to_verify", "supported_conclusion"}:
+                            errors.append(f"{path}: claim_evidence_map[{index}] claim_role must be source_claim_to_verify or supported_conclusion")
+                        claim_dom_id = str(item.get("claim_dom_id") or "")
+                        if claim_dom_id and claim_dom_id not in claim_dom_ids:
+                            errors.append(f"{path}: claim_evidence_map[{index}] claim_dom_id not found in HTML: {claim_dom_id}")
+                        evidence_items = item.get("evidence_items")
+                        if not isinstance(evidence_items, list) or not evidence_items:
+                            errors.append(f"{path}: claim_evidence_map[{index}] needs evidence_items[] with evidence_id, evidence_kind, dom_id, and supports_vs_illustrates")
+                            evidence_items = []
+                        has_source_support = False
+                        for evidence_index, evidence in enumerate(evidence_items, start=1):
+                            if not isinstance(evidence, dict):
+                                errors.append(f"{path}: claim_evidence_map[{index}].evidence_items[{evidence_index}] must be an object")
+                                continue
+                            missing_evidence = [
+                                field
+                                for field in ("evidence_id", "evidence_kind", "dom_id", "supports_vs_illustrates")
+                                if not evidence.get(field)
+                            ]
+                            if missing_evidence:
+                                errors.append(
+                                    f"{path}: claim_evidence_map[{index}].evidence_items[{evidence_index}] missing fields: {', '.join(missing_evidence)}"
+                                )
+                            evidence_kind = str(evidence.get("evidence_kind") or "")
+                            support_role = str(evidence.get("supports_vs_illustrates") or "")
+                            dom_id = str(evidence.get("dom_id") or "")
+                            if dom_id and dom_id not in evidence_dom_ids:
+                                errors.append(f"{path}: claim_evidence_map[{index}].evidence_items[{evidence_index}] dom_id not found in HTML: {dom_id}")
+                            if support_role == "supports" and evidence_kind in source_evidence_kinds:
+                                has_source_support = True
+                            if evidence_kind.startswith("generated") and support_role == "supports" and claim_role == "supported_conclusion":
+                                errors.append(
+                                    f"{path}: claim_evidence_map[{index}] uses a generated visual as proof; generated visuals may illustrate but not prove result claims"
+                                )
+                        if claim_role == "supported_conclusion" and not has_source_support:
+                            errors.append(f"{path}: claim_evidence_map[{index}] supported conclusions need at least one source evidence item")
+                        if claim_role == "source_claim_to_verify":
+                            linked_text = " ".join(str(dom_blocks_by_source_global.get(source_id, {}).get("text", "")) for source_id in source_ids)
+                            if not re.search(
+                                r"不能单独证明|不能.*证明|还要看|还需要|需要.*(?:实验|表格|证据)|待验证|not prove|cannot.*prove|needs?.*(?:table|evidence|experiment)|requires.*evidence",
+                                f"{linked_text} {item.get('limitation', '')}",
+                                re.I,
+                            ):
+                                errors.append(f"{path}: claim_evidence_map[{index}] source_claim_to_verify needs visible caveat text that sends readers to later evidence")
+                    missing_claim_sources = sorted(set(strong_claim_source_ids) - covered_claim_sources)
+                    if missing_claim_sources:
+                        errors.append(f"{path}: strong claim paragraphs missing claim_evidence_map coverage: {', '.join(missing_claim_sources[:8])}")
             is_chinese_bilingual = source_language not in {"", "zh", "zh-cn", "zh-hans"} and language_mode
             if is_chinese_bilingual and isinstance(rendered_visuals, int) and rendered_visuals > 0:
                 if generated_visual_language and generated_visual_language not in {"zh-dominant", "chinese-dominant"}:
@@ -1857,6 +2229,10 @@ def audit_html(
             if isinstance(generated_visuals, list):
                 if isinstance(rendered_visuals, int) and len(generated_visuals) < rendered_visuals:
                     errors.append(f"{path}: generated_visuals[] length ({len(generated_visuals)}) is smaller than generated_visuals_rendered ({rendered_visuals})")
+                source_position_by_id = {
+                    source_id: text.find(f'data-source-id="{source_id}"')
+                    for source_id in source_order
+                }
                 for index, item in enumerate(generated_visuals, start=1):
                     if not isinstance(item, dict):
                         continue
@@ -1885,6 +2261,23 @@ def audit_html(
                             errors.append(f"{path}: generated visual #{index} must record {key}")
                     if not item.get("linked_source_ids") and not item.get("linked_claim_ids"):
                         errors.append(f"{path}: generated visual #{index} should link to source paragraphs or claims")
+                    linked_sources = [str(value) for value in item.get("linked_source_ids", []) if value]
+                    if linked_sources and visual_path:
+                        visual_position = text.find(visual_path)
+                        linked_indices = [source_order[value] for value in linked_sources if value in source_order]
+                        linked_positions = [source_position_by_id[value] for value in linked_sources if source_position_by_id.get(value, -1) >= 0]
+                        if linked_indices and visual_position >= 0:
+                            preceding_blocks = len(re.findall(r'data-source-id=', text[:visual_position]))
+                            preceding_linked_indices = [value for value in linked_indices if value <= preceding_blocks]
+                            anchor_index = max(preceding_linked_indices) if preceding_linked_indices else min(linked_indices)
+                            if preceding_blocks - anchor_index > 5:
+                                errors.append(f"{path}: generated visual #{index} is too far from its first linked source paragraph")
+                        if linked_positions and visual_position >= 0:
+                            preceding_linked_positions = [value for value in linked_positions if value <= visual_position]
+                            anchor_pos = max(preceding_linked_positions) if preceding_linked_positions else min(linked_positions)
+                            next_review_pos = text.find("review-card", anchor_pos)
+                            if next_review_pos >= 0 and next_review_pos < visual_position:
+                                errors.append(f"{path}: generated visual #{index} appears after the chapter review instead of inside the reading path")
                     language = str(item.get("in_image_text_language", item.get("prompt_language", ""))).lower()
                     ratio = item.get("chinese_label_ratio")
                     if is_chinese_bilingual and not language:
@@ -1897,11 +2290,62 @@ def audit_html(
                     source_refs = item.get("source_refs_for_values")
                     if factual_values and not source_refs:
                         errors.append(f"{path}: generated visual #{index} uses factual values without source_refs_for_values")
+                    in_image_claims = item.get("in_image_claims")
+                    if in_image_claims and not (item.get("linked_claim_ids") or item.get("source_refs_for_values")):
+                        errors.append(f"{path}: generated visual #{index} contains in-image claims without linked claim/value sources")
             elif strict and isinstance(rendered_visuals, int) and rendered_visuals > 0:
                 errors.append(f"{path}: manifest must include generated_visuals[] entries with language and source-link metadata")
+            if interaction_inventory and isinstance(interaction_inventory, dict):
+                formula_count = interaction_inventory.get("formula_breakdowns")
+                formula_like_text = bool(re.search(r"ΔW|\\bW\\b.*\\bA\\b.*\\bB\\b|m_hat|v_hat|m\s*和\s*v|epsilon|β|beta|Algorithm\\s*\\d|伪代码|公式|更新式", visible_text, re.I))
+                needs_formula_manifest = (
+                    formula_count is True
+                    or (isinstance(formula_count, (int, float)) and formula_count > 0)
+                    or formula_like_text
+                    or "data-formula-breakdown" in text
+                )
+                if needs_formula_manifest:
+                    if not isinstance(formula_breakdowns, list) or not formula_breakdowns:
+                        errors.append(f"{path}: manifest needs formula_breakdowns[] with formula/algorithm line-level explanation metadata")
+                    else:
+                        formula_dom_ids = {
+                            attrs.get("data-formula-breakdown") or attrs.get("id")
+                            for _tag, attrs, _line in parser.starttags
+                            if attrs.get("data-formula-breakdown") or ("formula" in attrs.get("class", ""))
+                        }
+                        formula_dom_ids = {str(item) for item in formula_dom_ids if item}
+                        for index, item in enumerate(formula_breakdowns, start=1):
+                            if not isinstance(item, dict):
+                                errors.append(f"{path}: formula_breakdowns[{index}] must be an object")
+                                continue
+                            required_formula_fields = {"formula_id", "formula_dom_id", "linked_source_ids", "symbols", "step_explanation", "plain_example"}
+                            missing = sorted(field for field in required_formula_fields if not item.get(field))
+                            if missing:
+                                errors.append(f"{path}: formula_breakdowns[{index}] missing fields: {', '.join(missing)}")
+                            formula_dom_id = str(item.get("formula_dom_id") or "")
+                            if formula_dom_id and formula_dom_id not in formula_dom_ids and formula_dom_id not in text:
+                                errors.append(f"{path}: formula_breakdowns[{index}] formula_dom_id not found in HTML: {formula_dom_id}")
+                            if formula_dom_id:
+                                dom_match = re.search(
+                                    rf'<section\b[^>]+(?:id|data-formula-breakdown)=["\']{re.escape(formula_dom_id)}["\'][\s\S]*?</section>',
+                                    text,
+                                    re.I,
+                                )
+                                dom_text = dom_match.group(0) if dom_match else ""
+                                if dom_text and not re.search(r"符号|变量|symbol", dom_text, re.I):
+                                    errors.append(f"{path}: formula breakdown '{formula_dom_id}' needs a visible symbol/variable table")
+                                if dom_text and not re.search(r"步骤|逐步|step|先.*再|1\\.|2\\.", dom_text, re.I):
+                                    errors.append(f"{path}: formula breakdown '{formula_dom_id}' needs visible step-by-step explanation")
+                                if dom_text and not re.search(r"例子|比如|example|假设", dom_text, re.I):
+                                    errors.append(f"{path}: formula breakdown '{formula_dom_id}' needs a visible concrete example")
             if isinstance(paper_figures_manifest, list):
                 if isinstance(rendered_figures, int) and len(paper_figures_manifest) < rendered_figures:
                     errors.append(f"{path}: paper_figures[] length ({len(paper_figures_manifest)}) is smaller than paper_figures_rendered ({rendered_figures})")
+                paper_figures_by_id = {
+                    str(item.get("figure_id") or item.get("id") or ""): item
+                    for item in paper_figures_manifest
+                    if isinstance(item, dict)
+                }
                 for index, item in enumerate(paper_figures_manifest, start=1):
                     if not isinstance(item, dict):
                         continue
@@ -1924,6 +2368,38 @@ def audit_html(
                             errors.append(f"{path}: paper figure/table #{index} manifest explanation cues missing: {', '.join(missing)}")
                     else:
                         errors.append(f"{path}: paper figure/table #{index} needs explanation_cues_present[]")
+                runtime_figures_dict = runtime_figures if isinstance(runtime_figures, dict) else {}
+                for figure_id, item in paper_figures_by_id.items():
+                    allowed_sources = {
+                        str(value)
+                        for value in item.get("linked_source_ids", [])
+                        if value
+                    }
+                    if item.get("primary_source_id"):
+                        allowed_sources.add(str(item.get("primary_source_id")))
+                    primary_block = str(item.get("primary_rendered_block_id") or "")
+                    if primary_block and primary_block in block_id_to_source:
+                        allowed_sources.add(block_id_to_source[primary_block])
+                    section_match = re.search(
+                        rf'<section\b(?=[^>]*data-figure-id=["\']{re.escape(figure_id)}["\'])(?=[^>]*class=["\'][^"\']*source-figure)[\s\S]*?</section>',
+                        text,
+                        re.I,
+                    )
+                    if section_match:
+                        href_targets = re.findall(r'<a\b[^>]*href=["\']#([^"\']+)["\']', section_match.group(0), re.I)
+                        for target in href_targets:
+                            target_source = block_id_to_source.get(target, target)
+                            if allowed_sources and target_source not in allowed_sources:
+                                errors.append(
+                                    f"{path}: paper figure/table '{figure_id}' visible return link points to {target_source}, not its manifest source cluster"
+                                )
+                    runtime_record = runtime_figures_dict.get(figure_id) if isinstance(runtime_figures_dict, dict) else None
+                    if isinstance(runtime_record, dict):
+                        runtime_source = str(runtime_record.get("source_id") or "")
+                        if runtime_source and allowed_sources and runtime_source not in allowed_sources:
+                            errors.append(
+                                f"{path}: paper figure/table '{figure_id}' runtime source_id {runtime_source} disagrees with manifest linked sources"
+                            )
             elif isinstance(expected_figures, int) and expected_figures > 0:
                 errors.append(f"{path}: manifest needs paper_figures[] with primary placement and per-figure explanation metadata")
     elif strict:

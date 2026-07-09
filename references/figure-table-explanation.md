@@ -23,6 +23,7 @@ For tables:
 - highlight the cells that support the current claim
 - state the exact comparison: "compared with X, Y is higher/lower by Z" when the source supports it
 - avoid saying "提升" or "更好" without naming the baseline, metric, direction, and limitation
+- when the page states a result claim, add or update `claim_evidence_map` so the exact table/figure cells and limitations can be audited
 
 ## Explanation template
 
@@ -37,6 +38,8 @@ For every figure/table, include:
 - **回到原文**: which paragraph/claim it supports.
 
 If a figure/table has multiple panels, repeat the template at panel level or provide hotspots that reveal panel-specific explanations. A single generic caption is not enough for a complex multi-panel figure.
+
+The visible "回到原文" link, runtime figure metadata, and manifest `linked_source_ids` must point to the same source paragraph or claim cluster. A figure that returns to the wrong paragraph fails the learning loop.
 
 ## Experiments
 
@@ -60,6 +63,31 @@ For training/evaluation papers, distinguish:
 - observed performance improvement
 
 Readers often confuse "the simulated world improved" with "the model improved after training"; explicitly separate them when relevant.
+
+For algorithm screenshots or formula pages, do not treat the screenshot as a normal figure. Add a line-level breakdown:
+
+- original formula or pseudocode line
+- symbol or variable meanings
+- what changes after this line runs
+- a tiny numeric or concrete example
+- which later claim depends on this line
+
+The breakdown must be visible in HTML, not only recorded in the manifest. Use an element such as `data-formula-breakdown="adam-update"` and record the same id in `formula_breakdowns[].formula_dom_id`.
+
+## Claim Evidence Map
+
+For result, cost, quality, latency, memory, or efficiency claims, add `claim_evidence_map[]` entries:
+
+- `claim_role`: `source_claim_to_verify` when the paragraph states a paper claim that later evidence must verify, or `supported_conclusion` when the page presents it as supported.
+- `claim_dom_id`: the visible claim block or paragraph.
+- `source_ids`: source paragraphs containing the claim.
+- `comparison_baseline`: what it is compared with.
+- `metric_or_dimension`: score, cost, memory, latency, task quality, behavior, or qualitative dimension.
+- `direction_or_value`: what changed and in which direction.
+- `evidence_items[]`: each item needs `evidence_id`, `evidence_kind`, `dom_id`, and `supports_vs_illustrates`.
+- `limitation`: what the evidence does not prove.
+
+Generated teaching visuals should use `supports_vs_illustrates: illustrates`. They should not be the only proof for a `supported_conclusion`.
 
 ## Screenshots
 

@@ -27,6 +27,7 @@ For each paragraph or small paragraph group:
 - add a short "这段在推进什么" explanation
 - add "所以呢" when the paragraph contains a claim, result, or methodological step
 - add inline term triggers for concepts that would block understanding
+- write a paragraph-specific side note or marginal note; do not reuse a generic "this paragraph advances the chapter" sentence
 
 Avoid a tiny Chinese summary after a large English passage. Long source passages need proportional explanation.
 
@@ -83,6 +84,30 @@ For each important conclusion, answer:
 - What can we not conclude?
 
 When a conclusion uses words like "improves", "better", "training", "simulation", or "learned", name the object precisely. Explain whether the paper means a model's score improved, an agent's behavior changed, a simulated world produced data, a training dataset was constructed, or a human-facing evaluation changed.
+
+For every important claim, preserve the exact teaching chain:
+
+- claim: what the paper says
+- comparison: compared with what baseline or condition
+- metric/dimension: score, cost, latency, memory, behavior, human rating, or qualitative observation
+- evidence: figure/table/paragraph id and what the reader should inspect
+- limitation: what this evidence does not prove
+
+Record this in the manifest as `claim_evidence_map` so future reviewers can audit the page instead of trusting the prose.
+
+## Chapter recap
+
+Chapter recaps should help the reader produce understanding, not just click the right answer.
+
+Add a short Feynman-style scaffold such as:
+
+- 问题是什么？
+- 方法怎么做？
+- 相比谁？
+- 证据是什么？
+- 不能推出什么？
+
+Choice buttons are allowed, but they do not replace this scaffold.
 
 ## Tone
 

@@ -29,6 +29,8 @@ Choose per section, not globally:
 - Architecture/system papers: reader plus large diagram rail; use hotspots and "follow the data" arrows.
 - Experiments/results: `figure-led` with table/figure on one side and "怎么看 / 相比谁 / 结论 / 限制" on the other.
 - Dense experiments/results: use a wide source figure/table first, then explanation below, or split into row/panel cards. The reader must be able to inspect labels and numbers before reading the conclusion.
+- Evidence before conclusion: when a section claims improvement, competitiveness, superiority, correlation, or failure, place the supporting table/figure/evidence module before or directly beside the conclusion. Do not ask the reader to accept a result before seeing how to read the evidence.
+- Claim traceability: record important result/efficiency claims in `claim_evidence_map` with baseline, metric or dimension, direction/value, evidence ids, and limitation. If the site says "更好", "提升", "competitive", "efficient", or "降低成本", the reader should know compared with what and where the evidence is.
 - Theory/math: formula card with symbol table, plain example, and derivation steps.
 - Survey/related work: timeline, lineage map, comparison table, and chapter checkpoints.
 - Long papers: chapter switching plus review cards; do not make one endless page.
@@ -42,11 +44,13 @@ Borrow learning patterns from strong readers and study apps:
 - Anchored annotation: click exact words or table cells; the side panel opens at the relevant definition, evidence, or caveat.
 - Right-pane visualizer: clicking a concept can show a formula walkthrough, graph, 2D animation, Image 2 diagram, or source quote.
 - Formula breakdown: show the original formula, define every symbol, then give a tiny numeric or concrete example.
+- Algorithm walkthrough: for pseudocode, explain line by line what state changes, what input it uses, and how the next line depends on it. Do not rely on a full-page screenshot plus one caption.
 - Method chat: for multi-component systems, let components "speak" in a short dialogue only when it clarifies role and order.
 - Timeline/lineage: show how previous work leads to the current paper; use it as orientation, not decoration.
 - Comparison table: let readers compare methods, baselines, variants, or ablations.
 - Knowledge map: 6-25 concept nodes with edges can help review, but it must link back to the exact paragraphs.
 - Quiz/Feynman card: after a chapter, ask the reader to explain a term or choose which claim a table supports.
+- Feynman scaffold: include at least one structured recap that asks the reader to fill or check "问题是什么 / 方法怎么做 / 相比谁 / 证据是什么 / 不能推出什么". Multiple-choice checks are secondary.
 
 Use these as learning actions. Avoid interactions that only reveal the same summary again.
 
@@ -71,6 +75,10 @@ After implementation:
 - Check desktop first viewport: paper title, chapter navigation, language mode for non-Chinese papers, source paragraph, Chinese reading, explanation/side note, and at least one term or evidence affordance.
 - Check mobile: no horizontal overflow; bilingual blocks stack cleanly; panels are closable.
 - Smoke test: switch chapter, switch language, open/close term, open/close figure/table explanation, activate a visual or chapter-review control.
+- Check evidence order: result claims should not appear several reading blocks before the figure/table that supports them.
+- Check return links: visible figure links, runtime figure metadata, and manifest `linked_source_ids` should point to the same paragraph or claim cluster.
+- Check side-note specificity: repeated generic notes mean the page is still a template, even if the source text is present.
+- Check formula/algorithm coverage: formulas and pseudocode need `formula_breakdowns[]` with symbols, steps, and a tiny example.
 - Record `layout_strategy`, `source_rendering_modes`, `source_screenshot_blocks`, and `interaction_inventory` in the manifest.
 - Record `visual_readability_checks` and note whether dense figures used large view, split panels, or image-top layout.
 

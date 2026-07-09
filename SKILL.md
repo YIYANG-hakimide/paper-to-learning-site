@@ -37,11 +37,19 @@ Default reader level: a college student with no professional background in the p
 - Avoid generic "AI dashboard" styling. Choose a visual language tied to the paper, audience, and source artifacts.
 - Do not expose internal production notes to readers: no "面向无专业背景大学生", "reader level", "preflight", "manifest", "regression slice", "generated assets", or similar build/test wording in the public UI.
 - Side notes must be public teaching copy, not internal reasoning or reviewer instructions. Use labels such as "本段核心", "为什么重要", "怎么看证据", and "容易误解"; avoid copy like "读后文时要一直追问".
+- Side notes must be paragraph-specific. Do not repeat generic copy such as "这一段正在推进本章主线" across many reading blocks.
+- Result, efficiency, cost, quality, or improvement claims must be evidence-linked. Record `claim_role`, baseline, metric/dimension, direction/value, `evidence_items[]`, and limitation in `claim_evidence_map`.
+- Distinguish `source_claim_to_verify` from `supported_conclusion`. A paper's abstract can state a claim before experiments, but the page must visibly tell the reader it still needs later evidence.
+- Do not use generated diagrams as proof of experimental/result claims. Generated visuals may illustrate; source paragraphs, source figures/tables, formulas, or experiments must support.
+- Formula, algorithm, or pseudocode sections need a visible DOM module: original formula/line, symbol table, step explanation, and a tiny concrete example. Record it in `formula_breakdowns[]`.
 - Chapter, review/question, language, term, figure, and visualizer states must never be empty. Remove or implement controls before delivery.
+- Chapter recap must include a Feynman-style "用自己的话复述" scaffold in addition to any choice buttons, and it must link missing pieces back to evidence.
 - Before delivery, run a three-pass adversarial review for UI/UX, teaching clarity, bilingual/source coverage, and figure/table explanation coverage.
 - Before delivery, create and validate an interaction inventory: trigger, state change, close method, keyboard or return path, and linked source ids for chapter switching, language mode, term popovers, figure/table panels, chapter recap/review cards, and visualizers.
 - Chapter recap/review feedback must show an explicit "回到原文/回到证据" path and highlight or focus the supporting reading block. Do not rely only on hidden `data-source-id` values.
 - Before delivery, make the manifest prove completeness: `source_paragraphs_expected/rendered`, `source_blocks` with hashes/snippets, `chapter_coverage`, `term_anchors`, `term_explanations`, `paper_figures`, `generated_visuals`, and runtime/QA checks must match the page.
+- Before delivery, make traceability exact: `source_fidelity` points to a real extraction inventory with hash, term anchors match the DOM trigger paragraph and runtime term source, and figure return links match the same source cluster recorded in the manifest.
+- Before delivery, record `first_viewport_landmarks[]` so the first screen has a paper-specific visual object, not only title text. For long papers, also record `section_map[]` and `chapter_landmarks[]`.
 - When maintaining this skill or tightening quality gates, run at least ten concrete regression/interaction checks and make a known-bad sample fail for the intended reasons before claiming improvement.
 
 ## Mandatory Intake
@@ -87,6 +95,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - Extract or crop all paper figures/tables into image assets, splitting large composite figures into meaningful subfigures when that improves comprehension.
    - Build a manifest: sections, expected paragraph count, rendered paragraph count, per-block coverage, terms, inline anchors, claims, figures/tables, equations, generated visuals, tools used, and evidence.
    - Store source fidelity evidence in the manifest: each rendered source block needs `source_id`, `rendered_block_id`, `source_text_hash` or `normalized_snippet`, section/page, and chapter id.
+   - Add `source_fidelity` with extraction artifact or inventory path and `paragraph_alignment_checked=true` after checking rendered source against the extracted source.
 
 2. **Design the learning path**
    - Convert paper sections into a map or chapter navigation.
@@ -96,7 +105,9 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - Write a design brief that turns visual direction into UI decisions: typography scale, source text width, color semantics, spacing rhythm, component shapes, mobile behavior, and first-viewport priority.
    - Treat the design brief like a mini design-system file: it must specify tokens, component rules, layout behavior, and paper-specific avoidances, not just "modern", "Apple-like", or "anime".
    - Design from novice reader behavior: preserve the original, scaffold how to read it, teach prerequisite concepts at the moment of need, then ask the reader to inspect evidence before accepting a conclusion.
+   - Plan evidence before conclusion: for every claim that something is better, faster, cheaper, more competitive, or improved, place the table/figure/evidence module before or directly beside the claim and record it in `claim_evidence_map`.
    - Sketch the first viewport before coding: title, language mode, chapter map, bilingual reading block, and synchronized side note must all be visible or one click away.
+   - Choose and record the first-viewport landmark: source figure crop, Image 2 mechanism image, formula strip, algorithm snippet, table crop, or concept map. It must teach a paper-specific object.
 
 3. **Write explanation layers**
    - Keep every main-text source paragraph paired with Chinese translation or explanation according to source language.
@@ -113,6 +124,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - For multi-panel or dense source figures, either crop/split the panels or give the source image a large evidence position before explanatory text.
    - Use Image 2 diagrams for conceptual understanding: workflows, metaphors, system maps, experiment setup, training loops, comparison summaries, and "what the author is doing next" transitions.
    - Add learning interactions where useful: formula breakdowns, lineage timelines, method chats, comparison tables, ablation diagrams, concept maps, "本章核心要点回顾", or Feynman-style "用自己的话复述" checks.
+   - For algorithms, formulas, and pseudocode, create `formula_breakdowns[]` entries with symbols, steps, and a small example instead of only screenshotting the page.
    - For every generated visual, record `teaches_concept`, `reader_question`, `why_image_needed`, source links, language style, and factual-value provenance in the manifest.
    - If Image 2 is unavailable, stop and tell the user before substituting SVG/manual diagrams. Do not silently downgrade.
    - Generated images may include short labels and a few concise explanatory callouts when that improves comprehension; keep long definitions, bilingual paragraphs, and precise evidence explanations in HTML.
@@ -128,6 +140,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - Remove or implement empty interactions. Buttons with no state change, repeated generic drawers, `href="#"` dead links, review cards without evidence-linked feedback, or controls that reopen the same summary are not acceptable.
    - Implement terms as context-preserving reader aids: adjacent panel on desktop, bottom sheet or in-flow accordion on mobile, close/Escape support, return-to-source link, and focus return.
    - Make synchronized side notes real: every active reading block should provide a note title/body or note text, and focusing a different block should visibly update the side note.
+   - Write side notes as local teaching comments. Each note should identify what this paragraph contributes, which term/evidence to inspect, or what readers may misunderstand.
    - Do not hand-roll brittle state toggles such as `toggleAttribute("data-active", true)` for chapter panels. Active panels must be explicitly marked `data-active="true"` and inactive panels hidden.
    - Use reader-facing UI labels only. Replace production labels such as "generated asset" with learning labels such as "机制图解", "证据读法", or "概念地图".
    - Set the page title and deployment name to `Learn <paper short title>` or the best concise paper-specific name.
@@ -138,6 +151,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - Run `scripts/audit_learning_site.py <site-dir-or-html> --strict`.
    - Use `--expected-source-blocks <count>` when the extraction inventory knows the expected number of main reading blocks.
    - Perform at least three review passes: design/interaction, teaching comprehension, and bilingual/source/figure coverage. For each pass, record concrete fixes made or concrete reasons no fix was needed.
+   - Check claim/evidence traceability manually: choose several "提升/更好/competitive/efficient" claims and verify the page shows evidence before the conclusion, the manifest records `claim_evidence_map`, and return links land on the correct source block.
    - For skill maintenance or regression hardening, run the ten-round acceptance loop in `references/learning-site-ux-principles.md` and record which checks passed or failed.
    - Fix issues before final delivery.
 

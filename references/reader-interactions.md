@@ -35,6 +35,7 @@ Recommended layout:
 - Do not make a chapter map that only jumps to repeated summaries. Chapter switching should reveal that chapter's original/translation/explanation blocks.
 - For layout-sensitive original text, let the reader toggle between `排版截图` and `可选文字`, but keep both tied to the same `data-source-id`.
 - Add review actions when useful: "本章核心要点回顾", "用自己的话解释", "看概念图", or "回到证据".
+- Chapter recap should include a structured "用自己的话复述" path: problem, method, comparison, evidence, and limitation. It may also include choice buttons, but it should not stop there.
 - A knowledge map, chapter-review card, or Feynman card must link back to the paragraph/figure that taught the concept; otherwise it becomes disconnected decoration.
 - Language mode must be a real stateful interaction. It should update visible layers without losing the active chapter, active paragraph, synchronized side note, or open drawer context.
 - Do not leave `href="#"`, unlabeled icon controls, repeated "查看详情", or placeholder buttons in the final page.
@@ -52,6 +53,7 @@ Before final delivery, record and test each meaningful interaction:
 - feedback: chapter-review answer, visualizer state, active tab, or highlighted evidence
 - focus/return path: after close, the user should be back at the term, figure, table, or paragraph that launched the interaction
 - evidence return: chapter-review feedback should include a visible link or button that returns to the source paragraph/table supporting the point
+- traceability: term trigger paragraph, runtime term source, manifest `term_anchors`, visible figure return links, runtime figure source, and manifest `linked_source_ids` should agree
 
 Delete interactions that cannot pass this inventory. A static card is better than a fake button.
 
