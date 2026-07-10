@@ -6,6 +6,8 @@ Use Image 2 or the available image generation tool to create diagrams that reduc
 
 Do not silently replace requested Image 2 diagrams with hand-written SVG diagrams. If no image-generation tool is available, stop and report that generated teaching visuals are blocked or ask whether a lower-fidelity SVG fallback is acceptable.
 
+Do not treat an Image 2 chat preview as a delivered website asset. A generated teaching image counts only after a real bitmap file is available inside the site package and referenced by both HTML and manifest.
+
 Minimum default:
 
 - at least one generated explainer image per chapter
@@ -74,6 +76,7 @@ Do not create a public section titled like "生成教学图资产" or "Generated
 Record generated visuals in `data/learning-site-manifest.json`:
 
 - file path
+- asset hash, file size, dimensions, and embedded selector when practical
 - model/tool used, explicitly as `Image 2` or `gpt-image-2` for positive/final builds
 - chapter/section
 - teaching purpose
@@ -82,6 +85,19 @@ Record generated visuals in `data/learning-site-manifest.json`:
 - in-image text language
 - linked source ids or claim ids
 - factual values used and their source refs, if any
+
+## Local asset persistence contract
+
+For each generated teaching image:
+
+1. save or copy the bitmap into `assets/diagrams/`
+2. embed that exact relative path in the chapter reading flow
+3. record the same path in `generated_visuals[]`
+4. record image dimensions/hash/file size when practical
+5. add the image id to the owning chapter's `chapter_coverage[].generated_visual_ids`
+6. keep `generated_visuals_expected` equal to the planned per-chapter/hard-concept count
+
+If any generated image exists only as an in-chat preview, the site is blocked. Record the blocker in QA if useful, but do not call the site complete and do not change expected counts to hide the gap.
 
 If the asset was manually drawn SVG, mark it as `manual-svg-fallback` and do not count it as an Image 2 generated visual.
 

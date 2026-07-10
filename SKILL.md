@@ -30,10 +30,12 @@ Default reader level: a college student with no professional background in the p
 - Explain hard terms before using them: term definition, plain-language analogy, meaning in this paper, how the author uses it, and common misunderstanding.
 - Every figure/table from the paper must appear near the relevant argument unless it is truly redundant. Explain how to read it, what comparison it supports, what conclusion follows, and what it does not prove.
 - Complex figures/tables must be readable by default or have a real large-view mode. If side-by-side layout makes the image small, use image-on-top/text-below, a wide evidence module, or split the visual into smaller subfigures.
+- Do not turn every paper figure/table into repeated full-page screenshots. Crop or split dense figures/tables and record the crop/split or full-page rationale in the manifest.
 - Use Image 2 or the available image generation model generously as a teaching tool: at least one generated explainer image per chapter and one per major hard concept when useful.
 - Each generated teaching image must solve a local reading problem: record the concept taught, reader question, linked source ids, and why an image is needed. Do not use generated images as decorative galleries.
 - For Chinese or Chinese-bilingual learning sites, generated diagrams should use Chinese-dominant labels and callouts. Keep canonical English terms only when useful, preferably paired with Chinese.
-- Do not substitute hand-drawn SVG boxes for Image 2 visuals when the user asked for Image 2 or when an image-generation tool is available. Record generated visual provenance in a manifest.
+- Do not substitute hand-drawn SVG boxes for Image 2 visuals when the user asked for Image 2 or when an image-generation tool is available. A chat-only preview is not enough: the generated bitmap must be copied into the site, embedded near the source it teaches, and recorded in the manifest.
+- If Image 2/image generation cannot produce a local website asset, stop and report a blocker before final delivery unless the user explicitly approves a lower-fidelity fallback. Do not set `generated_visuals_expected` to `0` to bypass the default per-chapter teaching-image requirement.
 - Avoid generic "AI dashboard" styling. Choose a visual language tied to the paper, audience, and source artifacts.
 - Do not expose internal production notes to readers: no "面向无专业背景大学生", "reader level", "preflight", "manifest", "regression slice", "generated assets", or similar build/test wording in the public UI.
 - Side notes must be public teaching copy, not internal reasoning or reviewer instructions. Use labels such as "本段核心", "为什么重要", "怎么看证据", and "容易误解"; avoid copy like "读后文时要一直追问".
@@ -47,7 +49,9 @@ Default reader level: a college student with no professional background in the p
 - Before delivery, run a three-pass adversarial review for UI/UX, teaching clarity, bilingual/source coverage, and figure/table explanation coverage.
 - Before delivery, create and validate an interaction inventory: trigger, state change, close method, keyboard or return path, and linked source ids for chapter switching, language mode, term popovers, figure/table panels, chapter recap/review cards, and visualizers.
 - Chapter recap/review feedback must show an explicit "回到原文/回到证据" path and highlight or focus the supporting reading block. Do not rely only on hidden `data-source-id` values.
+- Chapter recap/review feedback must name the concrete evidence object or part of the evidence to inspect, such as a table column, figure curve, formula, metric, or prompt block. Generic "回到本章关键段落" feedback is not enough.
 - Before delivery, make the manifest prove completeness: `source_paragraphs_expected/rendered`, `source_blocks` with hashes/snippets, `chapter_coverage`, `term_anchors`, `term_explanations`, `paper_figures`, `generated_visuals`, and runtime/QA checks must match the page.
+- For PDF sources, source fidelity must include a real full/main-text extraction inventory in addition to selected rendered blocks, so omissions and coverage are auditable.
 - Before delivery, make traceability exact: `source_fidelity` points to a real extraction inventory with hash, term anchors match the DOM trigger paragraph and runtime term source, and figure return links match the same source cluster recorded in the manifest.
 - Before delivery, record `first_viewport_landmarks[]` so the first screen has a paper-specific visual object, not only title text. For long papers, also record `section_map[]` and `chapter_landmarks[]`.
 - When maintaining this skill or tightening quality gates, run at least ten concrete regression/interaction checks and make a known-bad sample fail for the intended reasons before claiming improvement.
@@ -92,6 +96,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - Run `scripts/preflight_learning_site.py --source <paper.pdf>` when a source path is known, or `scripts/preflight_learning_site.py` otherwise. Decide the extraction, image-generation, browser-check, and deployment routes from real tool availability and source readability.
    - If source preflight reports an unreadable/truncated PDF, stop before extraction, figure rendering, image generation, or site building. Ask for a repaired PDF or re-download from an authoritative source, then rerun source preflight.
    - Extract text into paragraphs with section labels, stable `source_id`s, source page/section, source order, and a text hash or normalized snippet for verification.
+   - For PDFs, record the full/main-text extraction inventory and total counts before selecting the rendered reading path. If the site is curated rather than complete, make that scope explicit and record omissions with reasons.
    - Extract or crop all paper figures/tables into image assets, splitting large composite figures into meaningful subfigures when that improves comprehension.
    - Build a manifest: sections, expected paragraph count, rendered paragraph count, per-block coverage, terms, inline anchors, claims, figures/tables, equations, generated visuals, tools used, and evidence.
    - Store source fidelity evidence in the manifest: each rendered source block needs `source_id`, `rendered_block_id`, `source_text_hash` or `normalized_snippet`, section/page, and chapter id.
@@ -123,6 +128,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - For every source figure/table, place it next to the argument it supports and explain it individually. Do not rely on one global "figure drawer" explanation for multiple charts.
    - For multi-panel or dense source figures, either crop/split the panels or give the source image a large evidence position before explanatory text.
    - Use Image 2 diagrams for conceptual understanding: workflows, metaphors, system maps, experiment setup, training loops, comparison summaries, and "what the author is doing next" transitions.
+   - Treat Image 2 completion as a local asset contract: every successful generated diagram must exist as a `.png`, `.jpg`, or `.webp` under the output site, be visible in the reading path, and have a manifest entry. If the tool only shows a chat preview or no copyable local path, mark the site blocked instead of finishing.
    - Add learning interactions where useful: formula breakdowns, lineage timelines, method chats, comparison tables, ablation diagrams, concept maps, "本章核心要点回顾", or Feynman-style "用自己的话复述" checks.
    - For algorithms, formulas, and pseudocode, create `formula_breakdowns[]` entries with symbols, steps, and a small example instead of only screenshotting the page.
    - For every generated visual, record `teaches_concept`, `reader_question`, `why_image_needed`, source links, language style, and factual-value provenance in the manifest.
@@ -149,6 +155,7 @@ Use `scripts/preflight_learning_site.py --source <paper.pdf>` before implementat
    - Run the site locally or open the HTML directly, depending on the build.
    - Use browser screenshots across desktop and mobile when possible; check that no text overlaps and all popovers/drawers can close.
    - Run `scripts/audit_learning_site.py <site-dir-or-html> --strict`.
+   - If `data/qa-report.json` exists, it must record a passed/clean final status. Any blocker, unresolved strict-audit status, or remaining error means the site is not complete.
    - Use `--expected-source-blocks <count>` when the extraction inventory knows the expected number of main reading blocks.
    - Perform at least three review passes: design/interaction, teaching comprehension, and bilingual/source/figure coverage. For each pass, record concrete fixes made or concrete reasons no fix was needed.
    - Check claim/evidence traceability manually: choose several "提升/更好/competitive/efficient" claims and verify the page shows evidence before the conclusion, the manifest records `claim_evidence_map`, and return links land on the correct source block.

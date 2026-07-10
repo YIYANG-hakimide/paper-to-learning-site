@@ -58,6 +58,7 @@ Create `data/learning-site-manifest.json` for every site:
   "generated_visuals_expected": 12,
   "generated_visuals_rendered": 12,
   "image_generation_model": "Image 2",
+  "image_generation_fallback_approved": false,
   "public_ui_clean": true,
   "inline_terms_expected": 40,
   "inline_terms_rendered": 40,
@@ -184,6 +185,12 @@ Create `data/learning-site-manifest.json` for every site:
     {
       "id": "qkv-map",
       "path": "assets/diagrams/qkv-map.png",
+      "asset_sha256": "sha256:...",
+      "file_size_bytes": 184320,
+      "width_px": 1536,
+      "height_px": 1024,
+      "embedded_selector": "figure[data-generated-visual-id='qkv-map'] img",
+      "asset_verified": true,
       "model_name": "Image 2",
       "teaches_concept": "Q/K/V roles in attention",
       "reader_question": "Why does attention need three projections instead of one vector?",
@@ -215,6 +222,9 @@ Use manifest fields to make reader-quality promises auditable:
 - `term_strip_only_count`: number of term chips that have no inline anchor; should be 0 unless explicitly justified.
 - `paragraph_anchors_rendered`: number of source paragraphs with stable ids or `data-source-id`.
 - `generated_visual_language`: use values such as `zh-dominant`, `en-dominant`, or `mixed`; Chinese-bilingual sites should usually be `zh-dominant`.
+- `generated_visuals_expected`: use the actual planned count from the default requirement, normally at least one per major chapter plus hard-concept diagrams. Do not set it to `0` because Image 2 export failed.
+- `image_generation_model`: use `Image 2` or `gpt-image-2` only when local bitmap assets are embedded in the site. Values such as `attempted`, `fallback`, `manual`, `placeholder`, `unavailable-local-export`, or `no exposed file path` mean the site is blocked unless `image_generation_fallback_approved` is explicitly true.
+- `image_generation_fallback_approved`: set true only when the user explicitly approves a lower-fidelity fallback. It does not turn manual/SVG diagrams into Image 2 outputs.
 - `design_brief`: public-facing visual direction chosen for this paper. Include visual direction, motif, typography plan, and why the site is not a generic dashboard/template.
 - `layout_strategy`: what layout system was chosen and whether desktop/mobile checks were run.
 - `layout_strategy.mobile_dynamic_interactions_checked`: true only after opening a mobile term panel, focusing another reading block, and using a chapter-review feedback control.
@@ -232,7 +242,9 @@ Use manifest fields to make reader-quality promises auditable:
 - `term_explanations`: per-term explanation ladder. Include definition, plain analogy, paper-specific meaning, author use, common misunderstanding, and linked source ids.
 - `paper_figures`: each source figure/table's primary in-flow location, linked paragraph ids, and explanation cues.
 - `generated_visuals`: model, language, source linkage, teaching concept, reader question, why an image was needed, and factual-value provenance for each generated teaching image.
+- `generated_visuals[].asset_sha256/file_size_bytes/width_px/height_px/embedded_selector/asset_verified`: recommended asset checks for generated images. The audit verifies file existence, bitmap type, real image loading, useful minimum size, and any supplied hash/size/dimensions.
 - `omitted_source_blocks`: every skipped paragraph/table/appendix block, with a reader-facing reason.
+- `source_fidelity` and the extraction inventory for PDF sources must distinguish full/main-text extraction scope from selected rendered blocks. Include fields such as `all_main_text_blocks`, `main_text_total_blocks`, `selected_blocks`, and `omitted_source_blocks`; a PDF inventory containing only `selected_blocks` is not enough for final delivery.
 - `tools_used.browser_qa`: record the real browser QA route. Prefer `Playwright with system Chrome` or `Playwright managed Chromium`; use `Chrome CLI fallback` only when Playwright is unavailable.
 
 ## Static reader standards
@@ -245,7 +257,9 @@ Use manifest fields to make reader-quality promises auditable:
 - Source prose screenshots are allowed only as facsimile aids paired with selectable source text, Chinese reading, and explanation.
 - Non-Chinese sources should include visible language controls such as `中英 / 中文 / EN only`.
 - Figure/table screenshots should be local assets with alt text.
+- Figure/table assets should be cropped to the relevant chart/table/panel or explicitly split into subfigures. Repeated full-page PDF screenshots are acceptable only when page context is the object of study and the manifest records why; they should not be the default for experiments or tables.
 - Generated diagrams should be local bitmap assets from Image 2 or the available image-generation tool, with nearby HTML explanations. Manual SVG diagrams are acceptable only as fallback after telling the user.
+- Generated diagrams are not complete while they exist only as chat previews. The same local bitmap path must be present in HTML, `generated_visuals[]`, and chapter coverage.
 - Generated-diagram captions should explain the learning purpose, not expose asset provenance. Avoid public labels like "生成教学图资产", "Generated explainer", or prompt summaries in visible UI.
 - Image `alt`, `title`, and `aria-label` are public UI too. Use learner-facing descriptions such as `Q/K/V 概念图` or `Figure 1 架构解读`, not `Generated explainer diagram`.
 - Visible buttons should describe the learning action: `读 Figure 1 架构图`, `放大 Table 2 结果表`, `解释 BLEU`, not repeated generic labels like `打开图表抽屉`.
@@ -256,6 +270,7 @@ Use manifest fields to make reader-quality promises auditable:
 - Every reading block should carry a stable `data-source-id` and contain source, translation/Chinese reading, and plain-language explanation in the main flow.
 - At least one real learning action should appear in each chapter when useful: inspect evidence, explain a term, break down a formula, compare a baseline, complete a core recap, or open a concept map.
 - Chapter core recap feedback must include a visible "回到原文/回到证据" path; hidden data links are not enough.
+- Chapter core recap feedback must name a concrete evidence object or feature of the evidence, such as `Table 2 Delta 列`, `Figure 3 年度均值曲线`, `reward formula`, or `Table 4 cost row`. Generic feedback like "回到本章关键段落检查表格、公式或机制" is not enough.
 - Language mode must actually switch reading layers: `中英` shows original and Chinese reading, `中文` hides or de-emphasizes original text while preserving a return-to-original affordance, and `EN only` shows source text while keeping term/figure anchors usable. The active paragraph and side panel must not lose sync after switching.
 - Use `Learn <paper short title>` as title and deployment name.
 
@@ -293,3 +308,5 @@ python3 /path/to/paper-to-learning-site/scripts/audit_learning_site.py <site-dir
 `--skip-browser` is not acceptable for final delivery because it does not check first viewport, mobile overflow, term overlap, figure large views, or review-card state changes.
 
 For maintenance work, also run the strict audit against at least one known-bad site and confirm it now fails for the intended reader-experience defects.
+
+If `data/qa-report.json` is written, it becomes part of the delivery contract. In strict mode, a non-passing `strict_audit_status`, non-empty `strict_audit_remaining_errors`, or any recorded blocker must fail final delivery.

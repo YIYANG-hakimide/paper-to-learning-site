@@ -37,6 +37,7 @@ Recommended layout:
 - Add review actions when useful: "本章核心要点回顾", "用自己的话解释", "看概念图", or "回到证据".
 - Chapter recap should include a structured "用自己的话复述" path: problem, method, comparison, evidence, and limitation. It may also include choice buttons, but it should not stop there.
 - A knowledge map, chapter-review card, or Feynman card must link back to the paragraph/figure that taught the concept; otherwise it becomes disconnected decoration.
+- Review feedback should name exactly what to inspect next: table column, figure panel/curve, formula term, metric, baseline, or prompt block. Avoid generic feedback that only says "回到本章关键段落" or "检查表格、公式或机制".
 - Language mode must be a real stateful interaction. It should update visible layers without losing the active chapter, active paragraph, synchronized side note, or open drawer context.
 - Do not leave `href="#"`, unlabeled icon controls, repeated "查看详情", or placeholder buttons in the final page.
 - Do not leave chapter tabs, question tabs, language modes, review choices, or figure buttons that open a title-only or empty panel. If a control exists, test every state.

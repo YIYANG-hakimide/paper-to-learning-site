@@ -18,6 +18,7 @@ Rules for screenshots:
 - Never screenshot normal prose as the only source text.
 - If a source screenshot is used, pair it with selectable text, translation/explanation, source id, page number, and a reason such as `formula layout`, `table layout`, or `multi-panel figure`.
 - Crop tightly. A giant page screenshot is usually a failure unless the page layout is itself the object of study.
+- Do not let all paper figures/tables become same-size full-page screenshots. If several assets share the PDF page dimensions, crop or split them and record the crop/split in the manifest.
 - If the image is dense, the default layout should not be a cramped left-image/right-text split. Use image-on-top/text-below, a wide figure band, zoomable evidence view, or split the figure into subfigures.
 
 ## Layout Selection
@@ -51,6 +52,7 @@ Borrow learning patterns from strong readers and study apps:
 - Knowledge map: 6-25 concept nodes with edges can help review, but it must link back to the exact paragraphs.
 - Quiz/Feynman card: after a chapter, ask the reader to explain a term or choose which claim a table supports.
 - Feynman scaffold: include at least one structured recap that asks the reader to fill or check "问题是什么 / 方法怎么做 / 相比谁 / 证据是什么 / 不能推出什么". Multiple-choice checks are secondary.
+- Review feedback must be evidence-specific. Name the exact table/figure/metric/column/curve/prompt block to inspect, not just "回到本章关键段落".
 
 Use these as learning actions. Avoid interactions that only reveal the same summary again.
 

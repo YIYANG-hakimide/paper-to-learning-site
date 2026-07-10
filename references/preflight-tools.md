@@ -33,6 +33,13 @@ If `source.errors` says the PDF is unreadable, truncated, missing xref data, or 
 
 The shell preflight cannot prove Image 2 availability by itself. It must report `manual_checks.image_generation`, and the main agent must confirm that the current Codex turn exposes an Image 2 or image generation tool before promising generated teaching diagrams.
 
+Image generation availability has two levels:
+
+1. generation route exists: the agent can call Image 2 or an approved image-generation tool.
+2. local asset route exists: the generated bitmap can be saved or copied into the output site's `assets/diagrams/` folder and referenced by HTML/manifest.
+
+Both must be true for a normal final build. If the tool only returns a chat preview, transient UI image, or no copyable local file path, report `blocked_by_local_image_generation_export` and stop before final delivery unless the user explicitly approves a lower-fidelity fallback. Do not continue by lowering `generated_visuals_expected` to `0`.
+
 ## Tool expectations
 
 Prefer these routes:
@@ -49,8 +56,8 @@ Prefer these routes:
 - Missing text extraction: stop and ask for a readable source or install route.
 - Unreadable source PDF: stop, repair/re-download the file, and rerun `preflight_learning_site.py --source` before extracting text or figures.
 - Missing figure rendering: continue only if figures are not required; otherwise report the blocker.
-- Missing Image 2/image generation: stop before replacing requested generated images with SVG/manual boxes.
+- Missing Image 2/image generation, or missing local bitmap export for generated images: stop before replacing requested generated images with SVG/manual boxes.
 - Missing browser automation: at minimum use system Chrome headless screenshot if available; otherwise state that visual QA is incomplete.
 - Playwright package present but no launchable browser: install Playwright browsers or use system Chrome through Playwright before claiming strict browser QA passed.
 
-Do not claim that Image 2 was used unless an image-generation tool actually produced bitmap assets or the current environment records generated image outputs.
+Do not claim that Image 2 was used unless an image-generation tool actually produced bitmap assets that are copied into the site, embedded in the reader, and recorded in `data/learning-site-manifest.json`.

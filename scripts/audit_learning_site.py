@@ -328,6 +328,20 @@ def image_dimensions(path: Path) -> tuple[int, int] | None:
     return None
 
 
+def image_asset_kind(path: Path) -> str | None:
+    try:
+        header = path.read_bytes()[:16]
+    except Exception:
+        return None
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if header.startswith(b"\xff\xd8"):
+        return "jpeg"
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
 def find_html_files(target: Path) -> list[Path]:
     if target.is_file():
         return [target]
@@ -349,6 +363,58 @@ def load_manifest(root: Path) -> dict[str, object] | None:
             data["_manifest_path"] = str(candidate)
             return data
     return None
+
+
+def load_qa_report(root: Path) -> dict[str, object] | None:
+    candidates = [
+        root / "data" / "qa-report.json",
+        root / "qa-report.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            try:
+                data = json.loads(candidate.read_text(encoding="utf-8"))
+            except Exception as exc:
+                return {"_qa_report_error": f"{candidate}: {exc}"}
+            data["_qa_report_path"] = str(candidate)
+            return data
+    return None
+
+
+def audit_qa_report(qa_report: dict[str, object] | None, strict: bool) -> list[str]:
+    if not qa_report:
+        return []
+    errors: list[str] = []
+    qa_path = str(qa_report.get("_qa_report_path") or "qa-report.json")
+    if "_qa_report_error" in qa_report:
+        errors.append(str(qa_report["_qa_report_error"]))
+        return errors
+    if not strict:
+        return errors
+
+    status = str(qa_report.get("strict_audit_status") or qa_report.get("status") or "").strip()
+    if status and not re.fullmatch(r"(pass|passed|clean|ok|success|0[_ -]?errors?)", status, re.I):
+        errors.append(f"{qa_path}: qa-report records unresolved strict audit status '{status}'")
+
+    remaining = qa_report.get("strict_audit_remaining_errors") or qa_report.get("remaining_errors") or qa_report.get("errors")
+    if isinstance(remaining, list) and remaining:
+        preview = "; ".join(compact_text(str(item)) for item in remaining[:5])
+        errors.append(f"{qa_path}: qa-report records unresolved strict audit errors: {preview}")
+
+    blocker = qa_report.get("blocker") or qa_report.get("blockers")
+    if isinstance(blocker, dict) and blocker:
+        what = compact_text(str(blocker.get("what_happened") or blocker.get("reason") or blocker))
+        errors.append(f"{qa_path}: qa-report records a final-delivery blocker: {what[:180]}")
+    elif isinstance(blocker, list) and blocker:
+        preview = "; ".join(compact_text(str(item)) for item in blocker[:5])
+        errors.append(f"{qa_path}: qa-report records final-delivery blockers: {preview}")
+    elif isinstance(blocker, str) and blocker.strip():
+        errors.append(f"{qa_path}: qa-report records a final-delivery blocker: {compact_text(blocker)[:180]}")
+
+    report_text = json.dumps(qa_report, ensure_ascii=False)
+    if re.search(r"blocked_by|no local (?:bitmap|export)|no exposed file path|unresolved", report_text, re.I):
+        errors.append(f"{qa_path}: qa-report still contains blocker/unresolved-delivery wording")
+    return errors
 
 
 def chrome_path() -> str | None:
@@ -1694,6 +1760,22 @@ def audit_html(
                 errors.append(f"{path}: generic button label '{label}' appears {count} times; name the figure, table, term, chapter, or learning action")
             if count > 3 and label in {"打开图表抽屉", "继续下一章", "查看详情", "展开详情", "了解更多", "展开", "打开"}:
                 errors.append(f"{path}: repeated generic button label '{label}' appears {count} times; use figure/table/chapter-specific learning actions")
+        generic_review_feedback: list[str] = []
+        for attrs, _line in parser.buttons:
+            feedback = compact_text(attrs.get("data-feedback", ""))
+            if not feedback:
+                continue
+            if re.search(r"关键段落|本章主线|本章图表|表格、公式或机制|对应原文", feedback) and not re.search(
+                r"\b(?:Figure|Table|Fig\.|Sec\.|Equation|Eq\.)\s*\d|图\s*\d|表\s*\d|公式\s*\d|"
+                r"data-evidence-id|figure-|table-|fig\d+|table\d+|Delta|baseline|column|row|列|行|指标|曲线|热力图",
+                feedback,
+                re.I,
+            ):
+                generic_review_feedback.append(feedback[:120])
+        if generic_review_feedback:
+            errors.append(
+                f"{path}: chapter review feedback is too generic; name the concrete figure/table/metric/source evidence: {generic_review_feedback[0]}"
+            )
         long_source_failures = 0
         for index, source_value in enumerate(source_texts):
             words = source_word_count(source_value)
@@ -1723,6 +1805,15 @@ def audit_html(
         expected_visuals = manifest.get("generated_visuals_expected")
         rendered_visuals = manifest.get("generated_visuals_rendered")
         image_model = str(manifest.get("image_generation_model", "")).lower()
+        image_fallback_approved = any(
+            manifest.get(key) is True
+            for key in (
+                "image_generation_fallback_approved",
+                "generated_visual_fallback_approved",
+                "allow_image_generation_fallback",
+                "allow_svg_fallback",
+            )
+        )
         source_language = str(manifest.get("source_language", "")).lower()
         framework_runtime = manifest.get("framework_runtime")
         source_blocks = manifest.get("source_blocks")
@@ -1754,8 +1845,22 @@ def audit_html(
         if isinstance(expected_visuals, int) and isinstance(rendered_visuals, int) and rendered_visuals < expected_visuals:
             errors.append(f"{path}: manifest says only {rendered_visuals}/{expected_visuals} generated visuals rendered")
         image2_pattern = r"image\s*2|gpt[-\s]*image[-\s]*2|gpt\s*image\s*2"
+        image_generation_downgrade_pattern = (
+            r"attempt(?:ed)?|fallback|manual|hand[-\s]?drawn|placeholder|"
+            r"pillow|pil\b|canvas|local\s+bitmap|no\s+exposed\s+file\s+path|"
+            r"not\s+generated|fake|mock|chat\s+preview|聊天预览|preview\s+only|"
+            r"not\s+exported|not\s+saved|no\s+local\s+asset|only\s+visible\s+in\s+conversation"
+        )
         if strict and expected_visuals and not re.search(image2_pattern, image_model, re.I):
             errors.append(f"{path}: manifest does not clearly record Image 2/gpt-image-2 for generated visuals")
+        if strict and expected_visuals and re.search(image_generation_downgrade_pattern, image_model, re.I):
+            errors.append(
+                f"{path}: manifest records an Image 2 downgrade/fallback for generated visuals, not a confirmed generated asset: '{image_model}'"
+            )
+        if strict and re.search(image_generation_downgrade_pattern, image_model, re.I) and not image_fallback_approved:
+            errors.append(
+                f"{path}: manifest records image-generation downgrade/fallback without explicit user-approved fallback: '{image_model}'"
+            )
         if strict:
             for field_name, value in (
                 ("source_language", source_language),
@@ -1959,12 +2064,35 @@ def audit_html(
                         errors.append(f"{path}: source_fidelity inventory path points outside site root: {inventory_path}")
                     if not inventory_asset.exists():
                         errors.append(f"{path}: source_fidelity inventory asset is missing: {inventory_path}")
-                    elif inventory_hash:
-                        actual_hash = file_sha256(inventory_asset)
-                        if actual_hash and actual_hash != inventory_hash:
-                            errors.append(f"{path}: source_fidelity inventory hash mismatch for {inventory_path}")
-                    elif strict:
-                        errors.append(f"{path}: source_fidelity needs extraction_inventory_sha256/source_inventory_sha256")
+                    else:
+                        if inventory_hash:
+                            actual_hash = file_sha256(inventory_asset)
+                            if actual_hash and actual_hash != inventory_hash:
+                                errors.append(f"{path}: source_fidelity inventory hash mismatch for {inventory_path}")
+                        elif strict:
+                            errors.append(f"{path}: source_fidelity needs extraction_inventory_sha256/source_inventory_sha256")
+                        try:
+                            inventory_data = json.loads(inventory_asset.read_text(encoding="utf-8"))
+                        except Exception as exc:
+                            errors.append(f"{path}: source_fidelity inventory is not readable JSON: {exc}")
+                            inventory_data = None
+                        if strict and isinstance(inventory_data, dict) and str(source_fidelity.get("source_format", "")).lower() == "pdf":
+                            has_selected_only = isinstance(inventory_data.get("selected_blocks"), list)
+                            has_full_inventory = any(
+                                key in inventory_data
+                                for key in (
+                                    "all_source_blocks",
+                                    "all_main_text_blocks",
+                                    "full_paper_blocks",
+                                    "main_text_blocks",
+                                    "full_paper_total",
+                                    "main_text_total_blocks",
+                                )
+                            )
+                            if has_selected_only and not has_full_inventory:
+                                errors.append(
+                                    f"{path}: PDF source inventory only records selected_blocks; record full/main-text extraction totals and rendered scope so the site cannot masquerade as complete coverage"
+                                )
                 if str(source_fidelity.get("source_format", "")).lower() == "pdf" and not source_fidelity.get("source_pdf_sha256"):
                     errors.append(f"{path}: PDF source_fidelity needs source_pdf_sha256")
                 if source_fidelity.get("paragraph_alignment_checked") is not True:
@@ -2219,16 +2347,40 @@ def audit_html(
                     )
                 ]
                 if isinstance(rendered_visuals, int) and non_appendix_chapters and rendered_visuals < len(non_appendix_chapters):
+                    message = (
+                        f"{path}: generated visuals are below the per-chapter teaching expectation "
+                        f"({rendered_visuals} visuals for {len(non_appendix_chapters)} non-appendix chapters)"
+                    )
+                    if image_fallback_approved:
+                        warnings.append(message)
+                    else:
+                        errors.append(message)
+                if (
+                    not image_fallback_approved
+                    and isinstance(expected_visuals, int)
+                    and expected_visuals == 0
+                    and non_appendix_chapters
+                ):
                     errors.append(
-                        f"{path}: generated visuals are below the per-chapter teaching expectation ({rendered_visuals} visuals for {len(non_appendix_chapters)} non-appendix chapters)"
+                        f"{path}: generated_visuals_expected=0 bypasses the default per-chapter Image 2 requirement; "
+                        "record the real expected count or an explicit user-approved fallback"
                     )
                 for index, chapter in enumerate(non_appendix_chapters, start=1):
                     visual_ids = chapter.get("generated_visual_ids")
                     if visual_ids is not None and not visual_ids:
-                        errors.append(f"{path}: chapter_coverage[{index}] has no generated_visual_ids; each major chapter needs a teaching visual or a justified omission")
+                        message = f"{path}: chapter_coverage[{index}] has no generated_visual_ids; each major chapter needs a teaching visual or a justified omission"
+                        if image_fallback_approved:
+                            warnings.append(message)
+                        else:
+                            errors.append(message)
             if isinstance(generated_visuals, list):
                 if isinstance(rendered_visuals, int) and len(generated_visuals) < rendered_visuals:
                     errors.append(f"{path}: generated_visuals[] length ({len(generated_visuals)}) is smaller than generated_visuals_rendered ({rendered_visuals})")
+                rendered_image_srcs = {
+                    src.split("#", 1)[0].split("?", 1)[0]
+                    for src, _alt, _line in parser.images
+                    if src and not is_external_or_embedded(src)
+                }
                 source_position_by_id = {
                     source_id: text.find(f'data-source-id="{source_id}"')
                     for source_id in source_order
@@ -2241,6 +2393,10 @@ def audit_html(
                         errors.append(f"{path}: generated visual #{index} must record model_name/tool")
                     elif strict and not re.search(image2_pattern, item_model, re.I):
                         errors.append(f"{path}: generated visual #{index} must record Image 2/gpt-image-2 provenance, not '{item_model}'")
+                    elif strict and re.search(image_generation_downgrade_pattern, item_model, re.I):
+                        errors.append(
+                            f"{path}: generated visual #{index} records an Image 2 downgrade/fallback, not confirmed Image 2 provenance: '{item_model}'"
+                        )
                     visual_path = str(item.get("path", "") or "")
                     if not visual_path:
                         errors.append(f"{path}: generated visual #{index} must record a local bitmap path")
@@ -2254,8 +2410,41 @@ def audit_html(
                             errors.append(f"{path}: generated visual #{index} path points outside site root: {visual_path}")
                         if not asset.exists():
                             errors.append(f"{path}: generated visual #{index} missing image asset: {visual_path}")
-                        if visual_path not in text:
-                            errors.append(f"{path}: generated visual #{index} path is not referenced in HTML: {visual_path}")
+                        else:
+                            kind = image_asset_kind(asset)
+                            if kind not in {"png", "jpeg", "webp"}:
+                                errors.append(f"{path}: generated visual #{index} is not a PNG/JPEG/WebP bitmap asset: {visual_path}")
+                            file_size = asset.stat().st_size
+                            expected_size = item.get("file_size_bytes")
+                            if file_size < 10_000:
+                                errors.append(f"{path}: generated visual #{index} file is too small to be a useful teaching image ({file_size} bytes): {visual_path}")
+                            if isinstance(expected_size, int) and expected_size != file_size:
+                                errors.append(f"{path}: generated visual #{index} file_size_bytes does not match asset size: {visual_path}")
+                            expected_hash = str(item.get("asset_sha256") or "")
+                            if expected_hash:
+                                actual_hash = file_sha256(asset)
+                                if actual_hash != expected_hash:
+                                    errors.append(f"{path}: generated visual #{index} asset_sha256 mismatch: {visual_path}")
+                            dimensions = image_dimensions(asset)
+                            if dimensions:
+                                width, height = dimensions
+                                expected_width = item.get("width_px")
+                                expected_height = item.get("height_px")
+                                if min(width, height) < 360 or max(width, height) < 900:
+                                    errors.append(f"{path}: generated visual #{index} is too small for close reading ({width}x{height}): {visual_path}")
+                                if isinstance(expected_width, int) and expected_width != width:
+                                    errors.append(f"{path}: generated visual #{index} width_px does not match asset width: {visual_path}")
+                                if isinstance(expected_height, int) and expected_height != height:
+                                    errors.append(f"{path}: generated visual #{index} height_px does not match asset height: {visual_path}")
+                            elif strict:
+                                warnings.append(f"{path}: generated visual #{index} dimensions could not be read; verify the bitmap manually: {visual_path}")
+                        normalized_visual_path = visual_path.split("#", 1)[0].split("?", 1)[0]
+                        if normalized_visual_path not in rendered_image_srcs and not re.search(
+                            rf"<source\b[^>]+srcset=[\"'][^\"']*{re.escape(normalized_visual_path)}",
+                            text,
+                            re.I,
+                        ):
+                            errors.append(f"{path}: generated visual #{index} path is not loaded by an img/picture source in HTML: {visual_path}")
                     for key in ("teaches_concept", "reader_question", "why_image_needed"):
                         if not item.get(key):
                             errors.append(f"{path}: generated visual #{index} must record {key}")
@@ -2368,6 +2557,44 @@ def audit_html(
                             errors.append(f"{path}: paper figure/table #{index} manifest explanation cues missing: {', '.join(missing)}")
                     else:
                         errors.append(f"{path}: paper figure/table #{index} needs explanation_cues_present[]")
+                figure_dimensions: dict[tuple[int, int], int] = {}
+                figure_records_with_dimensions = 0
+                figure_records_with_crop_or_split = 0
+                for item in paper_figures_manifest:
+                    if not isinstance(item, dict):
+                        continue
+                    if any(item.get(key) for key in ("crop_bbox", "split_from", "subfigure_of", "source_region", "panel_id")):
+                        figure_records_with_crop_or_split += 1
+                    figure_path = str(item.get("path", "") or "")
+                    if not figure_path:
+                        continue
+                    figure_asset = (root / figure_path.split("#", 1)[0].split("?", 1)[0]).resolve()
+                    if not figure_asset.exists():
+                        continue
+                    dimensions = image_dimensions(figure_asset)
+                    if dimensions:
+                        figure_records_with_dimensions += 1
+                        figure_dimensions[dimensions] = figure_dimensions.get(dimensions, 0) + 1
+                split_panels = (
+                    visual_readability_checks.get("split_panels_used")
+                    if isinstance(visual_readability_checks, dict)
+                    else None
+                )
+                has_manifest_split_panels = bool(split_panels)
+                if figure_records_with_dimensions >= 3 and figure_dimensions:
+                    dominant_dimensions, dominant_count = max(figure_dimensions.items(), key=lambda item: item[1])
+                    dominant_ratio = dominant_count / max(1, figure_records_with_dimensions)
+                    width, height = dominant_dimensions
+                    looks_like_full_pdf_page = height / max(width, 1) > 1.25 and min(width, height) >= 900
+                    if (
+                        dominant_ratio >= 0.8
+                        and looks_like_full_pdf_page
+                        and not figure_records_with_crop_or_split
+                        and not has_manifest_split_panels
+                    ):
+                        errors.append(
+                            f"{path}: paper figures/tables look like repeated full-page screenshots ({dominant_count}/{figure_records_with_dimensions} at {width}x{height}); crop/split dense figures or record why full-page facsimiles are needed"
+                        )
                 runtime_figures_dict = runtime_figures if isinstance(runtime_figures, dict) else {}
                 for figure_id, item in paper_figures_by_id.items():
                     allowed_sources = {
@@ -2439,6 +2666,7 @@ def main() -> int:
 
     root = target.parent if target.is_file() else target
     manifest = load_manifest(root)
+    qa_report = load_qa_report(root)
     html_files = find_html_files(target)
     if not html_files:
         print(f"ERROR: no HTML files found under {target}", file=sys.stderr)
@@ -2446,6 +2674,7 @@ def main() -> int:
 
     all_errors: list[str] = []
     all_warnings: list[str] = []
+    all_errors.extend(audit_qa_report(qa_report, args.strict))
     for html_file in html_files:
         errors, warnings = audit_html(html_file, root, args.strict, manifest, args.expected_source_blocks, args.skip_browser)
         all_errors.extend(errors)

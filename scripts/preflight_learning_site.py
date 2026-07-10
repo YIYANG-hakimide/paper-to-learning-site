@@ -279,7 +279,8 @@ def main() -> int:
             "browser_qa_driver": checks["playwright_browser"]["detail"] or checks["chrome_headless"]["detail"],
         },
         "manual_checks": {
-            "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams."
+            "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams.",
+            "image_asset_export": "After the first generated preview, verify that a PNG/JPG/WebP can be saved or copied into the site assets/diagrams directory. A chat-only preview is not a deliverable website asset."
         },
         "blockers": blockers,
     }

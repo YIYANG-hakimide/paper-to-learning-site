@@ -40,6 +40,7 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - Are explanations proportional to source difficulty, so long or dense English passages get more than one generic sentence?
    - Are chapter logic summaries and checkpoints useful?
    - Does each chapter recap include a Feynman-style "用自己的话复述" scaffold, not only multiple-choice buttons?
+   - Does chapter recap feedback name concrete evidence such as a table column, figure curve, formula, metric, or prompt block, instead of generic "回到本章关键段落" copy?
    - Are diagrams used where text alone would be dry or abstract?
    - Does each generated diagram have a local teaching job: mechanism, comparison, example, timeline, evidence map, misconception, or "what happens next" bridge?
    - Are generated diagrams and source figures large enough to read, or split into smaller focused visuals?
@@ -60,9 +61,12 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - Are all paper figures/tables included near the relevant paragraphs?
    - Is each figure/table counted once in a primary evidence position, rather than only in a gallery or drawer?
    - Does every figure/table individually explain how to read it, compared with what, conclusion, and limitation?
+   - Are dense figures/tables cropped, split, or shown large enough to read, rather than repeated full-page screenshots compressed into the same card size?
    - If a chart/table has been redrawn, are original values, order, axes, units, and uncertainty preserved and explained in HTML?
    - Are generated Image 2 diagrams embedded near the concept they teach, not collected as a public asset list?
+   - Are generated Image 2 diagrams real local bitmap assets loaded by the page, not only chat previews?
    - Does `data/learning-site-manifest.json` record source block ids/hashes, chapter coverage, inline term anchors, figure/table links, generated visual language, and omissions with reasons?
+   - For PDF sources, does the source inventory record full/main-text extraction totals in addition to selected rendered blocks?
    - Does the manifest record `source_fidelity`, `claim_evidence_map`, `formula_breakdowns` when relevant, and exact term/figure return-link consistency?
    - Does `source_fidelity` point to a real extraction inventory file and hash, rather than a self-reported sentence?
    - Do claim evidence entries distinguish source claims to verify from supported conclusions, and avoid using generated visuals as proof?
@@ -115,6 +119,7 @@ Do not call the site complete until:
 - key terms are inline and interactive
 - source figures/tables are placed and explained
 - generated visuals clarify hard ideas and are real Image 2/image-generation outputs unless a fallback was explicitly approved
+- Image 2 chat previews have been persisted as local `.png/.jpg/.webp` assets and loaded in the page; otherwise the site is blocked
 - original/source screenshots, if present, are not replacing readable HTML text
 - section layouts and interaction modules were chosen for the paper's content, not copied from a single template
 - local images load
