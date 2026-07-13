@@ -4,6 +4,8 @@
 
 The result must feel like a deliberately art-directed visual lesson, not an AI dashboard, a document pasted into slides, or twenty repetitions of one card layout. It should be more explanatory than a conventional teaching PPT and more evidence-grounded than a visual summary.
 
+It must also feel presentable. Every page needs a clear focal point, readable speaking order, and enough breathing room to work on a projected screen. A correct but report-like PDF fails PPT mode.
+
 ## First Two Slides
 
 Within the title slide and first content slide, a reviewer should understand:
@@ -18,7 +20,7 @@ Reject generic agenda slides, audience descriptions, production framing, and tem
 
 ## Preview Difference
 
-The three style previews must differ in at least three of these dimensions:
+When multiple style previews are generated, they must differ in at least three of these dimensions:
 
 - composition system
 - typography character
@@ -27,7 +29,7 @@ The three style previews must differ in at least three of these dimensions:
 - palette and contrast
 - information rhythm
 
-All previews must use real paper content. Do not present three recolored versions of the same layout.
+All previews must use real paper content. Do not present recolored versions of the same layout. When the direction is already clear, one well-inspected preview is enough and is preferred for speed.
 
 ## Slide Composition Families
 
@@ -43,6 +45,12 @@ Use multiple coherent composition families:
 - recap/reconstruction
 
 Record `layout_family` on each slide. No single content layout family should occupy more than about 60% of teaching slides unless the design brief explains why the paper genuinely requires it. Avoid consecutive repetition of the same left-text/right-image composition.
+
+## Presentation Rhythm
+
+Deliberately alternate opening question or tension, visual explanation, concrete example, source evidence, conclusion, and transition. Use section beats to reset attention without adding empty agenda pages.
+
+Read each page aloud during review. If a presenter must read a paragraph verbatim, split or rewrite it. If a page has no obvious first thing to look at, redesign it. Include some low-density, high-impact pages; reserve dense composition for evidence where density is justified.
 
 ## Size And Legibility
 
@@ -79,6 +87,8 @@ Reject the deck when:
 - image labels are garbled, tiny, or unrelated
 - internal prompt, asset, QA, model, manifest, or reader-level text is public
 - animations distract from reading or cause layout shifts
+- every page has report-card density and no presentational breathing room
+- the deck is merely image-series cards resized onto 16:9 pages
 
 ## Required Visual Review
 

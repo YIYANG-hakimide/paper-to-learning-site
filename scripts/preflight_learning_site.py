@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -142,6 +143,7 @@ def validate_source(source: str | None) -> tuple[dict[str, object] | None, list[
         "path": str(source_path),
         "exists": source_path.exists(),
         "size_bytes": source_path.stat().st_size if source_path.exists() else 0,
+        "file_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest() if source_path.exists() else None,
         "type": source_path.suffix.lower().lstrip("."),
         "pdfinfo_ok": None,
         "python_extract_ok": None,
@@ -247,12 +249,17 @@ print(json.dumps(payload, ensure_ascii=False))
 def main() -> int:
     parser = argparse.ArgumentParser(description="Preflight checks for paper-to-learning-site runs.")
     parser.add_argument("--source", help="Optional PDF/article path to validate before extraction")
+    parser.add_argument("--mode", choices=("image-series", "presentation-pdf", "interactive-html"), default="interactive-html")
+    parser.add_argument("--deploy", action="store_true", help="Check deployment tooling when HTML deployment is requested")
     args = parser.parse_args()
 
     pdfplumber_ok, pdfplumber_python = python_module("pdfplumber")
     pypdf_ok, pypdf_python = python_module("pypdf")
     pillow_ok, pillow_python = python_module("PIL")
     recommended_python = pdfplumber_python or pypdf_python or pillow_python or sys.executable
+
+    browser_required = args.mode in {"presentation-pdf", "interactive-html"}
+    browser_status = playwright_browser_status() if browser_required else status(True, "not required for image-series mode")
 
     checks: dict[str, dict[str, object]] = {
         "python3": status(bool(command_path("python3")), command_path("python3")),
@@ -269,7 +276,7 @@ def main() -> int:
         "python_pypdf": status(pypdf_ok, pypdf_python),
         "python_pillow": status(pillow_ok, pillow_python),
         "node_playwright": status(node_can_import("playwright")),
-        "playwright_browser": playwright_browser_status(),
+        "playwright_browser": browser_status,
         "chrome_headless": status(bool(chrome_path()), chrome_path()),
         "frontend_slides_skill": skill_status("frontend-slides"),
         "guizang_material_skill": skill_status("guizang-material-illustration"),
@@ -283,8 +290,8 @@ def main() -> int:
         "image_generation": "manual_check_required",
         "visual_deck_layout": checks["frontend_slides_skill"]["ok"] or "built-in fixed-stage fallback",
         "illustration_prompting": checks["guizang_material_skill"]["ok"] or "built-in paper-specific prompting",
-        "deck_export": checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"],
-        "browser_qa": checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"],
+        "deck_export": (checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"]) if args.mode == "presentation-pdf" else "not-required",
+        "browser_qa": (checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"]) if browser_required else "not-required",
         "github_publish": checks["git"]["ok"] and checks["gh"]["ok"],
         "vercel_deploy": checks["vercel"]["ok"],
     }
@@ -292,16 +299,22 @@ def main() -> int:
     source_report, source_errors = validate_source(args.source)
 
     blockers = []
-    if not routes["pdf_text"]:
+    source_is_pdf = bool(source_report and source_report.get("type") == "pdf")
+    if source_is_pdf and not routes["pdf_text"]:
         blockers.append("No PDF text extraction route found: install/use pdftotext, pdfplumber, or pypdf.")
-    if not routes["pdf_figures"]:
+    if source_is_pdf and not routes["pdf_figures"]:
         blockers.append("No PDF figure rendering route found: install/use pdftoppm or another reliable renderer.")
-    if not routes["browser_qa"]:
+    if browser_required and not routes["browser_qa"]:
         blockers.append("No browser QA route found: install Playwright or use system Chrome.")
+    if args.mode == "presentation-pdf" and not routes["deck_export"]:
+        blockers.append("No browser route found for presentation PDF export.")
+    if args.deploy and args.mode == "interactive-html" and not routes["vercel_deploy"]:
+        blockers.append("Vercel CLI is unavailable for the requested deployment.")
     blockers.extend(source_errors)
 
     report = {
         "checks": checks,
+        "mode": args.mode,
         "routes": routes,
         "source": source_report,
         "recommended_commands": {
@@ -312,7 +325,7 @@ def main() -> int:
         },
         "manual_checks": {
             "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams.",
-        "image_asset_export": "After the first generated preview, verify that a PNG/JPG/WebP can be saved or copied into the deck assets/visuals directory. A chat-only preview is not a deliverable deck asset."
+            "image_asset_export": "After the first generated preview, verify that a PNG/JPG/WebP can be saved into the selected mode's local asset directory. A chat-only preview is not a deliverable asset."
         },
         "blockers": blockers,
     }

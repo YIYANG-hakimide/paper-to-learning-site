@@ -2,7 +2,7 @@
 
 ## Placement
 
-Show each source figure/table near the paragraph that uses it. Do not place all figures at the end by default.
+Show each source figure/table at the point where its claim is taught. In HTML this means near the paragraph; in image/PPT modes it means the relevant ordered item/page or an immediately following evidence page. Do not place all figures at the end by default.
 
 Each figure/table needs a primary reading position. Galleries, drawers, or zoom views are secondary and do not count as coverage unless the figure/table also appears beside the relevant argument.
 
@@ -72,14 +72,14 @@ For algorithm screenshots or formula pages, do not treat the screenshot as a nor
 - a tiny numeric or concrete example
 - which later claim depends on this line
 
-The breakdown must be visible in HTML, not only recorded in the manifest. Use an element such as `data-formula-breakdown="adam-update"` and record the same id in `formula_breakdowns[].formula_dom_id`.
+The breakdown must be visible in the final output, not only recorded in the manifest. Use a dedicated image/PPT item or a visible HTML formula module. For HTML, use an element such as `data-formula-breakdown="adam-update"` and record the same id in `formula_breakdowns[].formula_dom_id`.
 
 ## Claim Evidence Map
 
 For result, cost, quality, latency, memory, or efficiency claims, add `claim_evidence_map[]` entries:
 
 - `claim_role`: `source_claim_to_verify` when the paragraph states a paper claim that later evidence must verify, or `supported_conclusion` when the page presents it as supported.
-- `claim_dom_id`: the visible claim block or paragraph.
+- `claim_dom_id`: the visible claim block, image item, presentation page, or HTML paragraph.
 - `source_ids`: source paragraphs containing the claim.
 - `comparison_baseline`: what it is compared with.
 - `metric_or_dimension`: score, cost, memory, latency, task quality, behavior, or qualitative dimension.
@@ -101,5 +101,5 @@ When using Image 2 or another illustration model to redraw a chart/table as a te
 
 - keep chart type, title, axis labels, units, ranges, tick labels, category order, values, and uncertainty/error bars
 - discard cramped screenshot styling, arbitrary colors, shadows, and weak layout
-- keep exact values in nearby HTML and in the manifest when values appear in the image
+- keep exact values in deterministic layout or source crops and in the manifest when values appear in the image/PPT/HTML
 - reject attractive visuals with wrong values, swapped order, missing axes, or unreadable labels

@@ -54,6 +54,10 @@
 - [ ] The first slide and first content slide feel paper-specific, not templated.
 - [ ] Slide `layout_family` distribution was checked; one repeated composition does not dominate without a paper-specific reason.
 - [ ] Storyboard order, manifest slide order, HTML order, PNG export order, and PDF order match.
+- [ ] Each page has an obvious focal point and speaking order.
+- [ ] The deck was read aloud and report-like paragraphs were split or rewritten.
+- [ ] Section beats, low-density emphasis pages, and evidence-dense pages form a deliberate presentation rhythm.
+- [ ] Projected-screen legibility was checked, not only laptop readability.
 
 ## Export
 

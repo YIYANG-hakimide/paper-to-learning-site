@@ -1,19 +1,19 @@
 # Preflight Tools
 
-Run a tool preflight before extracting the source or building the site. Do not wait until the end to discover that PDF extraction, Image 2 generation, or browser screenshots are unavailable.
+Run a mode-aware tool preflight before extracting the source or building the output. Do not wait until the end to discover that PDF extraction, image generation, browser export, or deployment is unavailable.
 
 ## Required command
 
 Run:
 
 ```bash
-python3 /path/to/paper-to-learning-site/scripts/preflight_learning_site.py
+python3 /path/to/paper-to-learning-site/scripts/preflight_learning_site.py --mode image-series
 ```
 
 When a source file is already known, run the source-aware check:
 
 ```bash
-python3 /path/to/paper-to-learning-site/scripts/preflight_learning_site.py --source /path/to/paper.pdf
+python3 /path/to/paper-to-learning-site/scripts/preflight_learning_site.py --source /path/to/paper.pdf --mode presentation-pdf
 ```
 
 Report:
@@ -22,7 +22,7 @@ Report:
 - source file readability when `--source` is provided
 - figure rendering/cropping route
 - Image 2 or image-generation route
-- browser/screenshot verification route, including whether Playwright can actually launch a browser
+- browser/screenshot verification route for PPT/HTML; image-series mode should not launch a browser unnecessarily
 - Vercel route if deployment was requested
 - the exact recommended Python executable from `recommended_commands.python`
 - blockers and fallbacks
@@ -36,7 +36,7 @@ The shell preflight cannot prove Image 2 availability by itself. It must report 
 Image generation availability has two levels:
 
 1. generation route exists: the agent can call Image 2 or an approved image-generation tool.
-2. local asset route exists: the generated bitmap can be saved or copied into the output site's `assets/diagrams/` folder and referenced by HTML/manifest.
+2. local asset route exists: the generated bitmap can be saved into the selected output package and referenced by its mode-specific manifest.
 
 Both must be true for a normal final build. If the tool only returns a chat preview, transient UI image, or no copyable local file path, report `blocked_by_local_image_generation_export` and stop before final delivery unless the user explicitly approves a lower-fidelity fallback. Do not continue by lowering `generated_visuals_expected` to `0`.
 
@@ -54,10 +54,10 @@ Prefer these routes:
 ## Failure policy
 
 - Missing text extraction: stop and ask for a readable source or install route.
-- Unreadable source PDF: stop, repair/re-download the file, and rerun `preflight_learning_site.py --source` before extracting text or figures.
+- Unreadable source PDF: stop, repair/re-download the file, and rerun `preflight_learning_site.py --source ... --mode ...` before extracting text or figures.
 - Missing figure rendering: continue only if figures are not required; otherwise report the blocker.
 - Missing Image 2/image generation, or missing local bitmap export for generated images: stop before replacing requested generated images with SVG/manual boxes.
-- Missing browser automation: at minimum use system Chrome headless screenshot if available; otherwise state that visual QA is incomplete.
+- Missing browser automation: block PPT/HTML strict delivery; it is not a blocker for pure image-series mode.
 - Playwright package present but no launchable browser: install Playwright browsers or use system Chrome through Playwright before claiming strict browser QA passed.
 
-Do not claim that Image 2 was used unless an image-generation tool actually produced bitmap assets that are copied into the site, embedded in the reader, and recorded in `data/learning-site-manifest.json`.
+Do not claim that Image 2 was used unless it actually produced the final local bitmap assets. Record the real model in `learning-series-manifest.json`, `learning-deck-manifest.json`, or `learning-site-manifest.json` according to mode.

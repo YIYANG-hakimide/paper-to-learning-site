@@ -1,6 +1,6 @@
 # Novice Reader Research
 
-Use these user-centered constraints when designing a paper learning deck or complete reader. The target reader is not simply "low background"; they are trying to build reading strategies while also understanding the paper.
+Use these user-centered constraints when designing image series, presentation PDFs, or interactive readers. The target reader is not simply "low background"; they are trying to build reading strategies while also understanding the paper.
 
 ## Observed Pain Points
 
@@ -15,10 +15,10 @@ Use these user-centered constraints when designing a paper learning deck or comp
 ## Design Responses
 
 - Start each chapter with a problem map: what question is this section answering, what evidence will appear, and what the reader should know after.
-- In deck mode, keep exact source quotations, figures, tables, formulas, page references, and evidence links visible at the points where claims are taught. In complete-reader mode, keep paragraph-level original text visible and annotated. Neither mode may replace the paper with unsupported summaries.
+- In image/PPT modes, keep exact source quotations, figures, tables, formulas, page references, and evidence cues visible at the points where claims are taught. In complete HTML mode, keep paragraph-level original text visible and annotated. No mode may replace the paper with unsupported summaries.
 - Attach definitions, examples, and "why this matters" to the exact sentence, term, figure, table cell, or equation where the reader needs them.
 - Encourage expert-like reading behaviors: summarize the current paragraph, inspect the data before accepting the conclusion, compare claim versus evidence, and note uncertainty.
-- Use "details on demand": keep the main line readable, but let readers open deeper definitions, examples, figure walkthroughs, and formula intuition in place.
+- Use progressive detail appropriate to the medium: separate images/pages for deeper explanation, and details-on-demand interactions in HTML.
 - For experiments and tables, provide an evidence routine before the conclusion: setup, metric, baseline, comparison, result, limitation.
 - Keep UI copy reader-facing. Say "先看作者要解决的问题" rather than "面向无专业背景大学生".
 - Use chapter checkpoints as learning actions, not decorative summaries: "我能解释 X", "我能读懂 Table 2 的比较对象", "我知道这个图不能证明什么".
@@ -26,14 +26,15 @@ Use these user-centered constraints when designing a paper learning deck or comp
 ## Skill Implications
 
 - The artifact is a learning scaffold first and a summary second.
-- Deck mode must retain source evidence and return-to-source paths; complete-reader mode must retain paragraph-level original text because annotations teach how to read the paper rather than replacing it.
+- Image/PPT modes must retain source evidence cues and page references; complete HTML mode must retain paragraph-level original text because annotations teach how to read the paper rather than replacing it.
 - Every major figure/table should be introduced before its conclusion, so the reader learns to inspect evidence.
 - Term explanations should appear at the point of confusion, not in a separate glossary route.
 - Generated diagrams should externalize hidden structure: actors, steps, data flow, training loop, comparison baseline, and uncertainty.
 
-## Reader Modes To Support
+## Learning Modes To Support
 
-- **Guided visual deck**: question-led route through the problem, prerequisites, method, evidence, conclusion, and limitations.
+- **Guided image series**: high-information visual route that can be read as an ordered album.
+- **Presentation PDF**: question-led route with speaking rhythm, focal visuals, evidence, conclusion, and limitations.
 - **Close reading**: paragraph-level original/translation with inline terms and side notes.
 - **Evidence mode**: figures/tables next to claims, with how-to-read guidance.
 - **Review mode**: checkpoints, flashcard-like terms, and chapter summaries.

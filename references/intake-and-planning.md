@@ -1,110 +1,89 @@
 # Intake And Planning
 
-## Required intake questions
+## Required Intake
 
-Ask before implementation unless the user already answered or explicitly asked to proceed with defaults:
+Ask unless already answered:
 
 1. 是否有想重点探讨、重点解释、或者希望读者特别关注的内容？
-2. 需要本地 HTML、PNG/PDF 图集，还是还要部署到 Vercel？
+2. 最终需要：`图片`、`PPT（PDF 演示稿）`、还是 `HTML 交互网页`？
 3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
 
-If the user is impatient or says "直接做", use defaults and state them briefly before starting.
+For images or PPT, also ask:
 
-## Source inventory
+4. 规模选择：`精简（6-10）`、`中等（11-20）`、`详细（21以上）`、还是 `自动判断`？
 
-Create a working inventory before designing:
+Use a compact structured intake. Do not ask the user to choose internal implementation details such as layout families, diagram types, extraction tools, or image providers.
 
-- source files and URLs
-- document title and best short title
-- source language
-- sections/chapters
-- paragraph count per section
-- all figures, tables, charts, equations, screenshots, appendices
-- key terms and prerequisites
-- claims and evidence
-- reader pain points likely to block comprehension
-- available tools from preflight: extraction, figure rendering, Image 2/image generation, browser QA, deployment
+For HTML, default to `complete` source coverage. If the source is unusually long or the user asks for a quick guide, ask whether `curated` is acceptable before omitting main-text blocks.
 
-## Teaching Deck Outline
+## Source Inventory
 
-Before designing, convert the paper into learner questions. For every planned slide, record:
+Inventory before designing:
 
-- learner question
-- one-sentence answer
+- source title, language, file hash, page count, sections, and main-text blocks
+- all important figures, tables, charts, equations, algorithms, screenshots, and appendices
+- prerequisite concepts and terminology dependencies
+- method stages, actors, data flow, training/inference/evaluation layers
+- claims, baselines, metrics, evidence, and limitations
+- likely novice misconceptions
+- available extraction, rendering, image generation, OCR, browser, PDF export, and deployment routes
+
+## Scope Plan
+
+Record:
+
+- selected `output_mode`: `image-series`, `presentation-pdf`, or `interactive-html`
+- selected `size_mode`: `concise`, `medium`, `detailed`, or `automatic`; omit fixed count for HTML
+- target and maximum item count
+- included focus areas
+- intentionally omitted secondary scope
+- source coverage and evidence coverage expectations
+
+## Storyboard
+
+Convert the paper into learner questions before final generation. Each image/page/chapter needs:
+
+- learner question and one-sentence answer
+- act/chapter and learning role
 - prerequisite dependency
 - source ids and page numbers
-- visual teaching job
-- generated illustration or source evidence
+- visual teaching job or evidence object
 - misconception to prevent
-- next-slide bridge
+- previous/next bridge
+- layout/composition family
 
-Default to a reading-first 18-36 slide deck. Use more slides when the paper has multiple prerequisites, a long method pipeline, composite figures, or several experimental claims.
+The story must cover problem, prerequisites, method, worked example when useful, evidence, conclusion, limitations, and learner reconstruction.
 
-## Paper-Specific Design Brief
+## Mode-Specific Design Brief
 
-Before implementation, write a design brief with concrete rules, not mood words:
+Write concrete design rules derived from the paper:
 
-- paper personality and reader emotion
-- source artifact motif: figures, equations, screenshots, tables, architecture diagrams, or visual scenes
-- typography roles for original text, Chinese reading, plain explanation, notes, captions, controls, formulas/code
-- color semantics for terms, evidence, limitations, definitions, and active state
-- spacing rhythm, source-text line width, and reading density
-- component rules for title, concept, method, worked-example, evidence, formula, comparison, recap, and source slides
-- fixed-stage behavior: 1920x1080 composition, viewport scaling, navigation, overview, fullscreen, and reduced motion
-- figure/table strategy: large view, split panels, image-top/text-bottom, or redraw/annotation approach
-- what this paper-specific site should avoid, such as generic AI gradients, dashboard grids, tiny figures, or decorative images
+- paper personality, era, emotional tone, and recognizable objects
+- visual thesis and source basis
+- typography, palette, texture/material, illustration language, and evidence style
+- semantic colors for definition, process, evidence, comparison, and limitation
+- composition families and repetition limits
+- source figure/table/formula strategy
+- public-copy tone and reader level
+- specific styles to avoid
 
-This is inspired by design-system `DESIGN.md` files: colors, typography, components, and states should be explicit enough that another agent can implement them.
+Images additionally define aspect ratio, information density, contact-sheet rhythm, and image text strategy.
 
-## Completeness Rule
+PPT additionally defines 16:9 stage, presentation pacing, section beats, focal scale, and transition behavior.
 
-The deck must not be built from only the abstract or selected convenient snippets. Inventory the whole main paper, then ensure every central claim, method component, important figure/table, and limitation is represented in the learning path.
+HTML additionally defines source-text hierarchy, bilingual layout, navigation, interactions, mobile behavior, and deployment target.
 
-For default deck mode:
+Mood words such as “clean”, “Apple-like”, “anime”, “ancient”, or “professional” are not enough without typography, composition, evidence, and topic-specific rules.
 
-- main slides explain and visualize the paper's logic
-- evidence slides preserve important original quotations, figures, tables, formulas, and page references
-- each important claim links to exact source ids
-- longer original text may live in evidence slides or the optional full reader
+## Completeness
 
-For optional complete-reader mode, every included main-section paragraph still needs:
+All modes must inventory the whole main paper, even when the selected output is concise.
 
-- original paragraph or faithful source text
-- translation if the source is not Chinese
-- plain-language explanation
-- links to terms, figures, equations, or notes when relevant
-
-For very long papers, deliver in stages only after telling the user exactly what is included in the current version and what is deferred. Main text comes before appendix deep dives unless the user asks otherwise.
-
-Do not satisfy "complete paper text" by hiding raw extraction inside a collapsed `<pre>` block. The main reader must expose paragraph-level source text paired with translation/explanation. Collapsed raw source can be a secondary appendix only.
-
-## Architecture Decision
-
-Default to a fixed-stage visual teaching deck:
-
-- one learner question per slide
-- generated teaching images as large primary objects
-- source evidence slides for tables, figures, formulas, and quotations
-- chapter/logic-unit divider and recap slides
-- overview and direct navigation
-- optional evidence panel or linked complete reader
-
-Build a chapter-switching reader only when the user explicitly asks for extensive in-page source reading:
-
-- top or side chapter map
-- right/main reading pane with original/translation/explanation
-- left or side learning pane for synchronized notes, terms, figures, and chapter logic
-- drawers or popovers for deep explanations
-- visible language mode controls for non-Chinese sources
-
-Adapt when the source suggests a better form:
-
-- experimental paper: evidence trail and figure-led reading
-- systems paper: architecture map plus step-by-step walkthrough
-- theory paper: concept ladder plus proof/argument map
-- survey/report: topic atlas plus comparison tables
-- narrative essay: scene/argument timeline plus close reading notes
+- Concise images/PPT may curate secondary material but must preserve central method, strongest evidence, and limitation.
+- Medium/detailed outputs must expand prerequisite, method, experiments, and figure explanations proportionally.
+- HTML must state whether it is a complete or curated reader. Complete mode requires paragraph-level source coverage.
+- Never hide missing understanding behind a decorative image or generic summary.
 
 ## Naming
 
-Use `Learn <paper short title>` for the deck title, package folder, and Vercel project name unless the user provides a name.
+Use `Learn <paper short title>` for title and package naming unless the user provides another name. Add mode suffixes only when multiple outputs are requested later, such as `-images`, `-presentation`, or `-site`.

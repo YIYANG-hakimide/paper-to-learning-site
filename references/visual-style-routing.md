@@ -4,6 +4,21 @@
 
 Choose style from the paper's content, not from the generator's favorite aesthetic. Style must improve recognition, orientation, and memory while keeping evidence precise.
 
+Every output needs an art-direction thesis. Readability is necessary but not sufficient: typography, composition, visual metaphor, palette, material, and rhythm should feel intentionally designed for this paper.
+
+## Internalized Design Principles
+
+- Show real-content previews when style is uncertain instead of asking for abstract adjectives.
+- Derive the visual language from the paper's objects, era, figures, interfaces, and emotional tone before considering templates.
+- Keep one coherent typography, palette, material, and illustration system while varying composition by teaching job.
+- Make the central visual explain a relationship, mechanism, comparison, scene, or evidence-reading task; beauty without teaching value is decoration.
+- Preserve chart/data semantics before beautifying presentation.
+- Let generated imagery handle scenes, mechanisms, spatial relationships, and metaphors; use deterministic composition for exact text, values, citations, formulas, and tables.
+- Use a fixed composition stage for PPT and source-anchored explanations for HTML.
+- Explore progressively: preview lightly, lock the direction, then expand it consistently.
+- For unfamiliar historical, scientific, cultural, technical, or branded objects, gather factual and visual references before generation. Record the stable recognition cues, sources consulted, and misleading cues deliberately avoided.
+- Save a provider-neutral prompt packet for every final generated visual: teaching question, exact labels, composition, objects/relationships, references, aspect ratio, safe area, forbidden elements, model, and prompt hash.
+
 ## Derivation Process
 
 Before generating previews, identify:
@@ -15,7 +30,7 @@ Before generating previews, identify:
 - audience and reading density
 - factual risks: what must not be visually invented or romanticized
 
-Then propose three different but plausible directions using real paper content. One should be restrained and highly readable, one should be more expressive and topic-specific, and one may be an experimental hybrid.
+When multiple directions are genuinely needed, propose three different but plausible previews using real paper content. One should be restrained and highly readable, one should be more expressive and topic-specific, and one may be an experimental hybrid. When the user or paper already determines the direction, create one representative preview to save time.
 
 ## Routing Examples
 
@@ -56,9 +71,27 @@ Use notebook, blackboard, geometric construction, proof map, symbol cards, or tr
 - Use semantic accent colors consistently for definition, process, evidence, comparison, and limitation.
 - Avoid theme costumes that reduce readability or imply false historical/scientific authenticity.
 
+## Image-Series Art Direction
+
+- Use 3:4 portrait by default and compose for album reading.
+- Allow higher information density than PPT: one main question plus 2-4 supporting visual groups.
+- Make pages vivid through scenes, material, spatial hierarchy, expressive diagrams, and concrete examples.
+- Alternate mechanism, scene, evidence, comparison, timeline, and recap forms while preserving one visual system.
+- Reject a sequence that repeats one social-card template with different text.
+- At contact-sheet scale, the series should show a clear opening, development, evidence section, and ending.
+
+## PPT Art Direction
+
+- Design for presentation: immediate focal point, large hierarchy, short spoken-language copy, breathing room, chapter beats, and deliberate transitions.
+- Use more pages instead of increasing text density.
+- Establish a clear order between title, question, image, and conclusion.
+- Reserve dense layouts for source evidence and comparison pages.
+- Avoid report pages that feel like article screenshots or image-series cards placed on a 16:9 canvas.
+- Keep the deck understandable asynchronously while ensuring every page also works when projected and explained aloud.
+
 ## Preview Rules
 
-Generate three real title/content preview slides, not style cards. Each preview should use:
+Generate real title/content previews, not style cards. Each preview should use:
 
 - the actual paper short title
 - one real learner question
@@ -66,4 +99,4 @@ Generate three real title/content preview slides, not style cards. Each preview 
 - the intended typography and palette
 - no internal labels such as “方案 A”, “preview”, template name, model name, or prompt text inside the slide
 
-Show the preview options to the user outside the slides. If the user does not respond and work may continue by default, choose the direction with the clearest evidence typography and strongest topic connection.
+Show options outside the output when alternatives were requested. Otherwise inspect the single inferred preview, lock it when it passes, and continue. Prefer the direction with the clearest evidence typography, strongest topic connection, and best fit for the selected output mode.

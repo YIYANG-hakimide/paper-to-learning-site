@@ -4,6 +4,8 @@
 
 Assume a college student who can read carefully but lacks professional background in the paper domain. Do not skip prerequisite knowledge.
 
+“College level” means the reader can follow a careful argument, basic quantitative comparison, and ordinary abstraction. It does not mean they already know the field's jargon, standard model architectures, training procedures, statistical conventions, or how to read academic figures.
+
 ## Explanation ladder
 
 For each hard concept, write in this order:
@@ -19,6 +21,8 @@ Never explain only "what the paper says" when the reader first needs the concept
 For foundational terms such as supervised fine-tuning, rejection sampling, attention, ablation, BLEU, p-value, likelihood, encoder, or simulation, assume the reader has never learned the term. Start with the field meaning before the paper-specific meaning.
 
 ## Paragraph treatment
+
+This section is mandatory for interactive HTML and becomes source-grounding guidance for image/PPT modes.
 
 For each paragraph or small paragraph group:
 
@@ -40,6 +44,30 @@ For dense paragraphs, unpack the paragraph's moving parts:
 - what a novice might confuse
 
 If a source paragraph is long or contains formulas, experimental claims, or several technical nouns, one generic Chinese sentence is not enough.
+
+## Mode Adaptation
+
+### Image Series
+
+- Teach prerequisites before paper-specific usage.
+- Use one main question and 2-4 supporting visual groups per image.
+- Include enough Chinese explanation for the image to stand alone; do not rely on a separate caption file.
+- Use concrete examples and visual analogies, then state where the analogy stops being accurate.
+- Add short source/page cues for claims and evidence.
+
+### Presentation PDF
+
+- Keep the visible page concise enough to present aloud.
+- Put one spoken-language conclusion on each page.
+- Use a worked example before abstract evidence when it materially helps novices.
+- Move nuance into a second page rather than shrinking copy.
+- The PDF should remain understandable without a presenter, but should not read like a report pasted into slides.
+
+### Interactive HTML
+
+- Preserve paragraph-level original/translation/explanation in complete-reader mode.
+- Keep definitions, figures, formulas, and notes attached to the exact reading position.
+- Allow details on demand without obscuring the source context.
 
 ## Inline terms
 

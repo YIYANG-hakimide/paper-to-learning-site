@@ -1798,6 +1798,13 @@ def audit_html(
     if manifest:
         if "_manifest_error" in manifest:
             errors.append(str(manifest["_manifest_error"]))
+        if str(manifest.get("manifest_schema_version")) != "0.3":
+            errors.append(f"{path}: manifest_schema_version must be 0.3")
+        if manifest.get("output_mode") != "interactive-html":
+            errors.append(f"{path}: manifest output_mode must be interactive-html")
+        scope_mode = manifest.get("scope_mode")
+        if scope_mode not in {"complete", "curated"}:
+            errors.append(f"{path}: manifest scope_mode must be complete or curated")
         expected_source = manifest.get("source_paragraphs_expected")
         rendered_source = manifest.get("source_paragraphs_rendered", source_count)
         expected_figures = manifest.get("paper_figures_expected")
@@ -1831,6 +1838,13 @@ def audit_html(
         interaction_inventory = manifest.get("interaction_inventory")
         term_explanations = manifest.get("term_explanations")
         source_fidelity = manifest.get("source_fidelity")
+        teaching_fidelity = manifest.get("teaching_fidelity")
+        hard_concept_coverage = manifest.get("hard_concept_coverage")
+        formula_coverage = manifest.get("formula_coverage")
+        experiment_coverage = manifest.get("experiment_coverage")
+        major_figure_coverage = manifest.get("major_figure_coverage")
+        central_claim_coverage = manifest.get("central_claim_coverage")
+        evidence_bundles = manifest.get("evidence_bundles")
         claim_evidence_map = manifest.get("claim_evidence_map")
         formula_breakdowns = manifest.get("formula_breakdowns")
         first_viewport_landmarks = manifest.get("first_viewport_landmarks")
@@ -1851,8 +1865,6 @@ def audit_html(
             r"not\s+generated|fake|mock|chat\s+preview|聊天预览|preview\s+only|"
             r"not\s+exported|not\s+saved|no\s+local\s+asset|only\s+visible\s+in\s+conversation"
         )
-        if strict and expected_visuals and not re.search(image2_pattern, image_model, re.I):
-            errors.append(f"{path}: manifest does not clearly record Image 2/gpt-image-2 for generated visuals")
         if strict and expected_visuals and re.search(image_generation_downgrade_pattern, image_model, re.I):
             errors.append(
                 f"{path}: manifest records an Image 2 downgrade/fallback for generated visuals, not a confirmed generated asset: '{image_model}'"
@@ -1862,6 +1874,8 @@ def audit_html(
                 f"{path}: manifest records image-generation downgrade/fallback without explicit user-approved fallback: '{image_model}'"
             )
         if strict:
+            if expected_visuals and not image_model:
+                errors.append(f"{path}: manifest must record the actual image model used")
             for field_name, value in (
                 ("source_language", source_language),
                 ("source_paragraphs_expected", expected_source),
@@ -1880,6 +1894,12 @@ def audit_html(
                 errors.append(f"{path}: source_paragraphs_expected ({expected_source}) is suspiciously below rendered source blocks ({source_count}); use the extraction inventory count")
             if isinstance(rendered_source, int) and rendered_source != source_count:
                 errors.append(f"{path}: source_paragraphs_rendered ({rendered_source}) must match main reader source block count ({source_count})")
+            if scope_mode == "curated":
+                omissions = manifest.get("omitted_source_blocks")
+                if not isinstance(omissions, list) or not omissions:
+                    errors.append(f"{path}: curated HTML must list omitted_source_blocks with reasons")
+                elif any(not isinstance(item, dict) or not item.get("source_id") or not item.get("reason") for item in omissions):
+                    errors.append(f"{path}: every curated omission needs source_id and reason")
             if (language_mode or term_count or source_figures or any(name in parser.class_counts for name in ("chapter-map", "chapter-tab", "map-item", "chapter-button"))):
                 framework_equivalent = isinstance(framework_runtime, dict) and framework_runtime.get("equivalent_reader_runtime") is True
                 if not uses_reader_runtime and not framework_equivalent:
@@ -2049,6 +2069,7 @@ def audit_html(
                             errors.append(f"{path}: tested_controls[{index}] for term interaction needs return_path")
                         if "term" in trigger_text and item.get("non_overlap_checked") is not True:
                             errors.append(f"{path}: tested_controls[{index}] for term interaction needs non_overlap_checked=true")
+            inventory_data = None
             if not isinstance(source_fidelity, dict) or not source_fidelity:
                 errors.append(f"{path}: manifest needs source_fidelity with extraction artifact and paragraph alignment evidence")
             else:
@@ -2097,6 +2118,86 @@ def audit_html(
                     errors.append(f"{path}: PDF source_fidelity needs source_pdf_sha256")
                 if source_fidelity.get("paragraph_alignment_checked") is not True:
                     errors.append(f"{path}: source_fidelity.paragraph_alignment_checked must be true after matching rendered paragraphs to extracted source")
+            full_inventory_blocks = []
+            if isinstance(inventory_data, dict):
+                for key in ("all_main_text_blocks", "all_source_blocks", "main_text_blocks", "full_paper_blocks", "source_blocks"):
+                    if isinstance(inventory_data.get(key), list):
+                        full_inventory_blocks = inventory_data.get(key)
+                        break
+            full_inventory_ids = {str(item.get("source_id")) for item in full_inventory_blocks if isinstance(item, dict) and item.get("source_id")}
+            included_ids = {str(item.get("source_id")) for item in source_blocks if isinstance(item, dict) and item.get("source_id")} if isinstance(source_blocks, list) else set()
+            omitted_entries = manifest.get("omitted_source_blocks") if isinstance(manifest.get("omitted_source_blocks"), list) else []
+            omitted_ids = {str(item.get("source_id")) for item in omitted_entries if isinstance(item, dict) and item.get("source_id")}
+            if full_inventory_ids:
+                if scope_mode == "complete":
+                    if omitted_ids or included_ids != full_inventory_ids:
+                        errors.append(f"{path}: complete HTML scope must render every full-inventory source id with zero omissions")
+                elif scope_mode == "curated":
+                    if included_ids & omitted_ids or included_ids | omitted_ids != full_inventory_ids:
+                        errors.append(f"{path}: curated HTML included and omitted source ids must exactly partition the full inventory")
+                    if manifest.get("curated_scope_notice_visible") is not True:
+                        errors.append(f"{path}: curated HTML must visibly disclose that the reader is curated")
+
+            teaching_inventory = None
+            if not isinstance(teaching_fidelity, dict) or not teaching_fidelity.get("inventory_path"):
+                errors.append(f"{path}: manifest needs teaching_fidelity pointing to data/teaching-inventory.json")
+            else:
+                teaching_path = (root / str(teaching_fidelity.get("inventory_path"))).resolve()
+                if not teaching_path.exists():
+                    errors.append(f"{path}: teaching inventory is missing: {teaching_fidelity.get('inventory_path')}")
+                else:
+                    try:
+                        teaching_inventory = json.loads(teaching_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        errors.append(f"{path}: teaching inventory is invalid JSON")
+                    declared_hash = str(teaching_fidelity.get("inventory_sha256") or "")
+                    if not declared_hash or file_sha256(teaching_path) != declared_hash:
+                        errors.append(f"{path}: teaching inventory hash is missing or incorrect")
+            if isinstance(teaching_inventory, dict):
+                if teaching_inventory.get("derivation_checked") is not True or teaching_inventory.get("reviewer_status") != "passed":
+                    errors.append(f"{path}: teaching inventory derivation/review has not passed")
+                source_inventory_hash = str(source_fidelity.get("extraction_inventory_sha256") or source_fidelity.get("source_inventory_sha256") or "") if isinstance(source_fidelity, dict) else ""
+                if str(teaching_inventory.get("source_inventory_sha256") or "") != source_inventory_hash:
+                    errors.append(f"{path}: teaching inventory is not linked to the current source inventory hash")
+                if not teaching_inventory.get("hard_concepts"):
+                    errors.append(f"{path}: teaching inventory must identify at least one hard concept")
+                if not teaching_inventory.get("central_claims"):
+                    errors.append(f"{path}: teaching inventory must identify at least one central claim")
+                coverage_map = {
+                    "hard_concepts": hard_concept_coverage,
+                    "formula_or_algorithm_items": formula_coverage,
+                    "experiments": experiment_coverage,
+                    "major_figures": major_figure_coverage,
+                    "central_claims": central_claim_coverage,
+                }
+                for inventory_key, coverage in coverage_map.items():
+                    entries = teaching_inventory.get(inventory_key)
+                    if not isinstance(entries, list):
+                        errors.append(f"{path}: teaching inventory needs {inventory_key}[]")
+                        continue
+                    if not isinstance(coverage, list):
+                        errors.append(f"{path}: manifest needs coverage array for {inventory_key}")
+                        continue
+                    by_id = {str(item.get("inventory_id")): item for item in coverage if isinstance(item, dict) and item.get("inventory_id")}
+                    for entry in entries:
+                        inventory_id = str(entry.get("id", ""))
+                        coverage_item = by_id.get(inventory_id)
+                        if not coverage_item:
+                            errors.append(f"{path}: teaching inventory item lacks coverage: {inventory_key}:{inventory_id}")
+                        elif coverage_item.get("status") != "covered" or not coverage_item.get("final_item_ids"):
+                            if scope_mode == "complete" or not coverage_item.get("reason"):
+                                errors.append(f"{path}: teaching item is not covered in final HTML: {inventory_key}:{inventory_id}")
+                central_ids = {str(item.get("id")) for item in teaching_inventory.get("central_claims", []) if item.get("id")}
+                bundle_ids = {str(item.get("claim_id")) for item in evidence_bundles if isinstance(item, dict) and item.get("claim_id")} if isinstance(evidence_bundles, list) else set()
+                if central_ids - bundle_ids:
+                    errors.append(f"{path}: central claims are missing cross-mode evidence bundles: {sorted(central_ids - bundle_ids)}")
+                if isinstance(evidence_bundles, list):
+                    for bundle in evidence_bundles:
+                        if not isinstance(bundle, dict):
+                            continue
+                        for field in ("bundle_id", "claim_id", "final_item_ids", "source_ids", "source_excerpt_or_asset", "visible_source_cue", "chinese_explanation", "evidence_meaning", "limitation"):
+                            if not bundle.get(field):
+                                errors.append(f"{path}: evidence bundle is missing {field}")
             if not isinstance(source_blocks, list) or not source_blocks:
                 errors.append(f"{path}: manifest needs source_blocks[] with per-paragraph ids/hashes, not only total source paragraph counts")
             if not isinstance(chapter_coverage, list) or not chapter_coverage:

@@ -16,6 +16,17 @@ The storyboard must contain:
 - per-slide question, answer, source ids, visual/evidence owner, misconception, transition, and layout family
 - `narrative_checks`: prerequisite order, evidence-before-conclusion, training/inference/evaluation separation, and final reconstruction
 
+For PPT, every page also records:
+
+- `presentation_beat`: tension, explanation, example, evidence, conclusion, transition, or recap
+- `spoken_takeaway`: the sentence a presenter should say aloud
+- `density_class`: low, medium, or evidence-dense
+- `section_reset`: whether this page visibly opens a new chapter
+- `reveal_order`: the intended visual reading/animation order
+- `estimated_seconds`: expected presentation time
+
+Avoid more than three consecutive evidence-dense pages without a reset, synthesis, or example.
+
 The normal act structure is:
 
 1. **进入问题**: what matters and why the existing situation is insufficient.
@@ -26,7 +37,7 @@ The normal act structure is:
 
 Adapt act names and count to the paper, but preserve the learning functions. A deck that jumps from attractive concept images to result charts without these bridges fails.
 
-Only the three style previews may precede storyboard lock. Every later image must reference an existing storyboard slide id.
+Only lightweight style previews may precede storyboard lock. Generate one when direction is clear and three only when alternatives are requested or genuinely needed. Every later image must reference an existing storyboard item id.
 
 ## Recommended Arc
 

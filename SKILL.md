@@ -1,236 +1,183 @@
 ---
 name: paper-to-learning-site
-description: "Turn academic papers, PDFs, research reports, or difficult articles into visual-first teaching decks: a sequence of Image 2 or other image-model explainer slides delivered as an interactive 16:9 HTML presentation, PNG slide set, PDF, and optionally Vercel. Also supports a complete bilingual source reader as an optional evidence layer. Use when the user asks for 论文讲解PPT, 论文讲解图, paper explainer deck, visual paper course, bilingual paper explanation, figure/table teaching, or a paper learning website."
+description: "Turn academic papers, PDFs, research reports, or difficult articles into one of three guided learning outputs: an ordered series of high-information generated explainer images, a presentation-style PDF deck, or an interactive bilingual HTML learning site that can be deployed. Use when the user asks for 论文讲解图, 论文画册, 论文PPT, paper explainer deck, visual paper course, bilingual paper explanation, figure/table teaching, or a paper learning website."
 ---
 
-# Paper To Learning Deck
+# Paper To Learning
 
 ## Goal
 
-Turn a difficult paper into a coherent visual lesson for a college student with no professional background. The primary product is a reading-first 16:9 teaching deck made from a sequence of explanatory pages and generated teaching images. HTML is the presentation and sharing container, not the product idea itself.
+Turn a difficult paper into a coherent visual lesson for a college student with no professional background. Ask which final form the user needs, then build only that primary output:
 
-The deck must help the learner answer:
+1. **图片 / Image series**: an ordered set of high-information explainer images.
+2. **PPT / Presentation PDF**: a 16:9 presentation deck delivered as PDF.
+3. **HTML / Interactive site**: an interactive, bilingual or Chinese guided reader that can be deployed.
 
-- What problem is the paper solving and why does it matter?
-- What prerequisite concepts do I need first?
-- What did the authors build, argue, or test?
-- How does the method work step by step?
-- What does each important figure/table compare?
-- What evidence supports each conclusion?
-- What remains uncertain or limited?
+All three modes share the same teaching logic, source fidelity, evidence rules, and paper-specific visual direction. They differ in information density, composition, interaction, export, and QA.
 
-Keep the former complete bilingual reader as an optional evidence mode, not the default main experience.
+## Mandatory Intake
 
-## Default Deliverable
+Ask before implementation unless already answered or the user explicitly asks for defaults:
 
-Create a reading-first visual deck with:
+1. 是否有想重点探讨、重点解释、或者希望读者特别关注的内容？
+2. 最终需要哪种产出：`图片`、`PPT（PDF 演示稿）`、还是 `HTML 交互网页`？
+3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
 
-- one self-contained `index.html` using a fixed 1920x1080 stage scaled to the viewport
-- previous/next, keyboard, overview, progress, fullscreen, and direct-slide navigation
-- local raster teaching images under `assets/visuals/`
-- cropped source figures/tables under `assets/evidence/`
-- a structured `data/learning-deck-manifest.json`
-- optional per-slide PNG export and one PDF export
-- optional Vercel deployment when requested
+If the user selects **图片** or **PPT**, also ask:
 
-Default length is 18-36 slides. Split dense ideas into more slides instead of shrinking text or combining unrelated concepts.
+4. 内容规模：`精简（6-10 张/页）`、`中等（11-20 张/页）`、`详细（21 张/页以上）`，还是 `自动判断`？
+
+Use one compact structured intake when the environment supports it. If the user says “默认”, choose the output only when their request already implies it; otherwise ask for output mode because it materially changes the product. For image/PPT size, default to automatic.
+
+## Output Modes
+
+### Image Series
+
+Create a logically ordered visual album, not slide screenshots and not a folder of unrelated illustrations.
+
+- Default canvas: 3:4 portrait for reading and sharing; adapt when the user names another channel or ratio.
+- Each image may carry more information than a presentation slide, but must still answer one main learner question.
+- Use Image 2 / `gpt-image-2` or another real image model for the final raster images.
+- Use varied forms according to content: scene, process, timeline, comparison, architecture, annotated evidence, data-first graphic, concept map, scientific illustration, or consulting-style page.
+- Put concise explanation, key labels, and source/page cues directly into the composition when readable.
+- Keep exact numbers, quotations, equations, and evidence faithful; use carefully composed source crops or deterministic overlays when generation could distort them.
+- Deliver the numbered PNG/JPEG/WebP sequence, contact sheet, storyboard, manifest, and QA report. Do not build HTML or PDF unless requested.
+
+### PPT / Presentation PDF
+
+Create a presentation-oriented 16:9 deck and deliver a PDF. An internal HTML stage may be used for layout and export, but it is not the requested final product unless the user also asks for HTML.
+
+- Use fixed 1920x1080 pages.
+- Favor speaking and showing: larger focal visuals, shorter copy, clearer pacing, chapter beats, and deliberate transitions.
+- A page should usually communicate one idea within several seconds, while evidence pages may be denser.
+- Generate teaching visuals as large primary objects; use source figures/tables/formulas for proof.
+- Export and verify the final PDF page order, crop, font rendering, and representative pages.
+- Deliver the PDF plus optional numbered page PNGs and source package. Do not present the internal HTML as the main deliverable.
+
+### HTML / Interactive Site
+
+Create the guided interactive reader originally developed by this skill.
+
+- Put readable source text in-page; do not use a PDF iframe as the primary experience.
+- For non-Chinese sources, provide original text, Chinese translation/reading, and plain-language explanation.
+- Keep terms inline at the exact words they explain.
+- Put figures/tables beside the relevant claims with interactive close reading.
+- Use chapter switching, evidence links, closable explanations, language controls, and responsive layouts.
+- Use generated teaching visuals where they materially improve understanding.
+- Deliver a local static HTML package and deploy to Vercel only when requested.
+- Default to a complete guided reader. For very long sources, ask whether a curated reader is acceptable before reducing source coverage; record every omission and reason.
+
+## Size Modes For Images And PPT
+
+- **Concise**: normally 6-10 images/pages. Preserve the problem, essential prerequisite, core method, strongest evidence, conclusion, and limitation. State that secondary detail is omitted.
+- **Medium**: 11-20 images/pages. Default for most ordinary papers; include prerequisites, method steps, a worked example, major evidence, and limitations.
+- **Detailed**: 21 or more images/pages. Use for long or concept-heavy papers, full teaching, multiple experiments, or explicit user focus. Avoid exceeding 36 without a clear reason or user approval.
+- **Automatic**: calculate from main-text length, hard concepts, method complexity, figures/tables, and requested focus. See `references/output-modes-and-sizing.md`.
+
+Do not hit a target count by adding filler. Do not compress required logic into tiny text merely to stay under the count. If the selected count cannot responsibly cover the user's focus, explain the tradeoff and prioritize the requested scope.
 
 ## Non-Negotiables
 
-- Run tool and source preflight before extraction or image generation.
-- Extract and inventory the whole main paper before outlining. Do not build from only the abstract or selected snippets.
-- Organize the deck by learner questions and causal logic, not mechanically by the paper table of contents.
-- Lock a complete storyboard before generating final teaching images. The only images allowed before storyboard lock are the three style previews.
-- Treat images as owned slide components, never as a standalone gallery. Every final visual must have one owning slide, a learner question, previous/next logic, and linked source evidence before generation.
-- Use one main teaching question per slide. A slide may contain supporting detail, but must have one obvious cognitive job.
-- Make explanatory visuals the main feature. Most teaching slides should contain a substantial generated visual, source figure/table, formula breakdown, or carefully composed evidence graphic.
-- Generate at least one teaching visual per major concept and at least one per paper chapter/logic unit when an image materially helps. Prefer several focused visuals over one overloaded poster.
-- Use Image 2 / `gpt-image-2` when available. If unavailable, use another real image-generation model or user-configured image route. Record the actual model; never claim Image 2 when another model was used.
-- If no image model is available, report the missing route and offer configuration guidance. Use manual SVG/CSS diagrams only after explicit user approval; do not silently downgrade.
-- A chat preview does not count. Every generated visual must be a local PNG/JPEG/WebP asset embedded in the deck.
-- Choose visual style from the paper's subject, objects, era, emotional tone, source figures, and audience. Do not impose one house style on every paper.
-- Generate three genuinely different title/content style previews before the full deck unless the user already chose a direction or explicitly asks to skip previews.
-- Keep image labels short and Chinese-dominant for Chinese readers. Put long explanations, citations, exact values, and bilingual text in selectable HTML.
-- Do not use generated images as evidence. Generated visuals explain; source text, source figures, tables, formulas, and experiments prove.
-- Every important conclusion must name the comparison baseline, metric/dimension, direction or value, source evidence, and limitation.
-- Every important paper figure/table must be shown and explained. Crop or split dense multi-panel figures instead of shrinking full-page screenshots.
-- Explain prerequisites before paper-specific use: field definition, plain-language analogy, meaning in this paper, author usage, and common misunderstanding.
-- Never expose production notes, reader targeting, prompt text, asset status, manifest terms, or internal reasoning in public slides.
-- Validate slide overflow, visual legibility, navigation, image loading, source traceability, and export rendering before delivery.
-
-## Intake
-
-Ask these three questions unless already answered or the user says to use defaults:
-
-1. 是否有想重点探讨、重点解释、或者希望读者特别关注的内容？
-2. 需要本地 HTML、PNG/PDF 图集，还是还要部署到 Vercel？
-3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
-
-Defaults: explain all difficult concepts and evidence; create local HTML plus PNG/PDF-ready deck; target a non-specialist college student.
+- Run source/tool preflight before extraction or generation.
+- Extract and inventory the complete main paper before selecting content.
+- Organize by learner questions and causal logic, not mechanically by the paper table of contents.
+- Lock `data/storyboard.json` before final image generation or page implementation. Only lightweight style previews may precede storyboard lock.
+- Every final image/page must have an owning storyboard item, source ids, teaching purpose, and previous/next bridge.
+- Preserve the arc: problem -> prerequisites -> method -> evidence -> conclusion -> limitation -> learner reconstruction.
+- Explain hard terms in this order: field definition, plain analogy, meaning in this paper, author usage, common misunderstanding.
+- Separate data/world construction, training, inference/simulation, and evaluation whenever relevant.
+- Show experimental setup, baseline, and metric before the result conclusion.
+- Generated visuals explain; source text, source figures/tables, formulas, and experiments prove.
+- Every important result names baseline, metric/dimension, direction/value, evidence, and limitation.
+- Choose visual style from the paper's topic, era, objects, source artifacts, and emotional tone. Do not force one house style.
+- For Chinese readers, use Chinese-dominant labels and keep long, precise copy outside unreliable generated text when necessary.
+- A chat preview does not count. Final generated images must be local PNG/JPEG/WebP assets.
+- Never expose prompts, QA notes, reader targeting, manifest language, or internal reasoning in the public output.
 
 ## Required References
 
-Read before planning:
+Always read before planning:
 
 - `references/intake-and-planning.md`
 - `references/pedagogy-rules.md`
 - `references/novice-reader-research.md`
+- `references/teaching-coverage-contract.md`
+- `references/output-modes-and-sizing.md`
 - `references/visual-deck-storytelling.md`
+- `references/performance-and-caching.md`
 
-Read before visual design and image generation:
+Read before visual generation:
 
 - `references/visual-style-routing.md`
 - `references/image2-diagram-guidance.md`
-- `references/deck-design-quality-gate.md`
-- `references/figure-table-explanation.md` when the source contains evidence, equations, charts, or experiments
 - `references/image-model-routing.md`
+- `references/figure-table-explanation.md` when evidence, formulas, charts, or experiments exist
 
-Read before implementation and delivery:
+Read by selected mode:
 
-- `references/implementation-and-deploy.md`
-- `references/deck-qa-checklist.md`
-- `references/qa-checklist.md` only when building the optional full reader
+- Images: `references/image-series-quality-gate.md`
+- PPT: `references/deck-design-quality-gate.md`, `references/deck-qa-checklist.md`, `references/implementation-and-deploy.md`
+- HTML: `references/design-quality-gate.md`, `references/reader-interactions.md`, `references/reader-runtime-contract.md`, `references/layout-and-visual-patterns.md`, `references/qa-checklist.md`, `references/implementation-and-deploy.md`
 
-## Workflow
+## Shared Workflow
 
-### 1. Preflight And Source Inventory
+### 1. Preflight And Extract Once
 
-1. Run `scripts/preflight_learning_site.py --source <paper.pdf>`.
-2. Stop on unreadable or truncated sources.
-3. Extract the complete main text with stable source ids, section, page, order, normalized snippet, and hash.
-4. Inventory all figures, tables, equations, algorithms, appendices, and important examples.
-5. Build a prerequisite list, hard-concept list, claim/evidence map, and likely novice misconceptions.
-6. Detect available image routes in this order: built-in image generation, configured image skill/tool, OpenAI-compatible image API, another user-configured model. Record the selected route.
+1. Run `scripts/preflight_learning_site.py --source <paper.pdf> --mode <image-series|presentation-pdf|interactive-html>` and add `--deploy` only when HTML deployment is requested.
+2. Stop on unreadable, truncated, or heavily unextractable sources.
+3. Create a source-hash cache and reuse extraction, page renders, crops, terms, claims, and evidence inventory across retries or output modes.
+4. Extract stable source ids, pages, order, snippets/hashes, figures, tables, formulas, hard concepts, prerequisites, and likely misconceptions.
+5. Create `data/teaching-inventory.json` from the full source before storyboarding. It must enumerate hard concepts, formulas/algorithms, experiments, major figures/tables, and central claims that require coverage.
 
-### 2. Build The Teaching Story
+### 2. Decide Scope And Story
 
-Create a paper logic map before writing slides:
+1. Apply the selected output and size mode.
+2. Build the teaching arc and complete ordered storyboard.
+3. Record per item: learner question, one-sentence answer, source ids, teaching role, visual/evidence owner, misconception, layout family, and next bridge.
+   - For PPT also record `presentation_beat`, `spoken_takeaway`, `density_class`, `section_reset`, `reveal_order`, and `estimated_seconds`.
+   - For factual image/PPT items record a reader-visible source cue, not only hidden source ids.
+4. Validate coverage and remove filler before locking the storyboard.
 
-1. The real-world or intellectual problem.
-2. Why existing approaches are insufficient.
-3. Prerequisites the learner needs.
-4. The author's core move.
-5. Components and process in causal order.
-6. How data, training, simulation, or evaluation are separated.
-7. Experimental setup before results.
-8. Evidence, comparisons, and limitations.
-9. A final learner reconstruction of the whole paper.
+### 3. Choose Visual Direction Efficiently
 
-Convert the logic map into `data/storyboard.json` before generating final teaching images. The storyboard must define acts/chapters, complete slide order, transitions, evidence placement, and image ownership. Mark `storyboard_locked_before_final_generation=true` only after checking the whole teaching arc.
+- If the user gave a style or the paper has a strong natural visual language, infer one direction and create one representative preview.
+- Generate three alternatives only when the user requests options or the visual direction is genuinely ambiguous.
+- Style previews are not final content and must not multiply the final generation workload.
 
-For every planned slide, record:
+### 4. Produce In Small Batches
 
-- `learner_question`
-- `one_sentence_answer`
-- `source_ids`
-- `visual_job`
-- `visual_type`
-- `evidence_or_illustration`
-- `misconception_to_prevent`
-- `next_slide_bridge`
-- `act_id`
-- `chapter_id`
-- `layout_family`
-- `owned_visual_id` or `owned_evidence_id`
+- Work in storyboard batches of 3-6 items.
+- Generate only the assets owned by that batch.
+- Compose or finalize the batch immediately, then create a contact sheet and check continuity.
+- Reuse approved visual motifs, components, source crops, and prompt packets; do not regenerate unchanged assets.
+- When supported, generate independent assets in parallel with a conservative concurrency limit.
+- Fix a batch before moving forward. Do not generate all images first and assemble the story at the end.
 
-Do not create a slide merely because a paper section exists. Create it because the learner needs a question answered.
+### 5. Validate By Mode
 
-Do not start bulk image generation from a list of concepts alone. A concept image without an owning slide and a position in the teaching arc is an orphan asset and must not be generated.
+- Images: run `scripts/audit_visual_series.py <output-dir> --strict`; inspect every final image and the full contact sheet.
+- PPT: build and inspect the deck, export PDF, then run the canonical final command `scripts/audit_learning_deck.py <work-dir-or-index.html> --strict --require-pdf`.
+- HTML: run `scripts/audit_learning_site.py <site-dir-or-index.html> --strict`; test desktop/mobile interactions and source coverage.
+- For every mode, run design, novice-learning, and evidence-fidelity reviews. Record concrete fixes in `qa/qa-report.json`.
 
-### 3. Choose Explanation Granularity
+## Performance Rules
 
-- Give one slide to every prerequisite that would block later understanding.
-- Give one or more slides to every multi-step mechanism.
-- Separate world/data construction, model training, simulation execution, and evaluation when the paper contains them.
-- Separate a source figure overview from panel-level interpretation when one slide cannot make labels readable.
-- Split long method pipelines into overview, component pages, and a concrete worked example.
-- For formulas: show the original formula, symbol meanings, one step at a time, and a tiny numeric or concrete example.
-- For results: show experimental setup first, then evidence, then conclusion. Never present the conclusion several slides before the table or figure.
-- Use a chapter/section recap framed as “本章核心要点回顾”, including a Feynman-style reconstruction, not an exam-like quiz.
+- Build only the selected output. Do not automatically produce images + PDF + HTML together.
+- Reuse source extraction and visual assets by source hash.
+- Prefer one inferred style preview when the direction is clear.
+- Keep automatic output size proportional to the paper; do not default every paper to 30+ items.
+- Use deterministic HTML/CSS for exact text, citations, formulas, and tables instead of asking the image model to redraw them repeatedly.
+- Regenerate only failed assets or pages, not the full set.
+- Run cheap structural checks before expensive browser rendering, OCR, image regeneration, or deployment.
+- Use fast sampling during iteration, then run full strict QA once the structure stabilizes.
+- Treat external design skills as optional accelerators, not hidden dependencies. The paper-specific art direction, reference gathering, prompt packet, fixed-stage, and evidence rules in this skill must remain sufficient when they are absent.
 
-### 4. Design The Visual Language
+## Delivery
 
-1. Derive 2-3 plausible styles from the paper itself.
-2. Generate three authentic preview slides with real paper content.
-3. Choose or obtain the user's choice.
-4. Write a compact design brief: typography, palette, material/texture, image style, layout grammar, evidence color, limitation color, and animation behavior.
-5. Keep one coherent visual system across the deck while allowing different visual forms for concepts, methods, evidence, formulas, and recaps.
+State clearly what was selected and return only the relevant primary artifact:
 
-Examples, not fixed templates:
+- Images: numbered image folder/contact sheet and count.
+- PPT: final PDF and page count.
+- HTML: local `index.html` and deployed URL when requested.
 
-- agent simulation or game world: pixel art, map, rooms, characters, event paths
-- history or classical texts: restrained ink, archival paper, maps, timelines, artifact details
-- biology or medicine: editorial scientific illustration, labeled structures, process layers
-- algorithms or systems: precise technical editorial diagrams, pipelines, architecture cutaways
-- social science or humanities: magazine editorial, scenes plus argument maps, timelines
-- economics or business: evidence-first report graphics, comparison matrices, causal loops
-
-Do not sacrifice clarity for period styling. A historical deck may use an archival visual language while charts, dates, and citations remain crisp HTML.
-
-### 5. Generate Teaching Images
-
-Generate only from the locked storyboard. Work in chapter-sized batches of roughly 3-6 slides:
-
-1. Generate the batch's owned visuals.
-2. Compose those slides immediately in the HTML deck.
-3. Render a batch contact sheet.
-4. Check narrative continuity, image scale, repeated composition, and evidence placement.
-5. Fix the batch before generating the next one.
-
-Do not generate all images first and postpone slide composition until the end.
-
-For each visual:
-
-1. State the local learner question and why prose alone is insufficient.
-2. Choose the visual form: scene, process, cycle, cutaway, comparison, timeline, system map, metaphor, data-first editorial graphic, or micro-sequence.
-3. Compress in-image copy to 3-7 short Chinese labels and at most 1-3 brief callouts.
-4. Put exact data, nuanced explanation, citations, and bilingual passages outside the bitmap.
-5. Generate a high-resolution raster asset with safe margins and the deck's chosen style.
-6. Inspect labels, arrows, factual objects, crop, and readability. Regenerate failed assets.
-7. Save prompt, model, file path, dimensions, source links, teaching purpose, and rejected-attempt reason when relevant.
-
-Do not make every image a flowchart. Vary the visual grammar according to the idea being taught.
-
-### 6. Compose The Deck
-
-- Use a fixed 1920x1080 stage and scale it uniformly; do not reflow slide content on phones.
-- Give every slide a stable `data-slide-id` matching its storyboard and manifest id.
-- Prefer a single self-contained HTML file with local assets and no build requirement.
-- Use real deck navigation and accessible keyboard controls.
-- Use generated visuals as large primary objects, not tiny thumbnails beside long text.
-- For image-led slides, prefer a large image above or full-bleed with concise HTML explanation below/alongside.
-- Use source evidence slides for figures, tables, formulas, and quotations, with page/source references.
-- Add “查看原文依据” to important claims. It may open a non-obscuring evidence panel or jump to an appendix/evidence slide.
-- Keep original-language quotations short on main slides. Put longer bilingual source passages in evidence slides or the optional full reader.
-- Preserve a clear progress rhythm: question -> visual explanation -> source evidence -> conclusion -> bridge.
-- Make acts and chapters perceptible through section openings, progress context, and transitions, while avoiding empty agenda pages.
-- Ensure the full deck reads as one continuous lesson when viewed as a contact sheet. Reject a sequence that feels like unrelated posters even when individual pages look attractive.
-- Remove every unused generated image from the final package or record it under rejected attempts outside public assets. `assets/visuals/` must not contain orphan images.
-
-### 7. Validate And Deliver
-
-1. Run `scripts/audit_learning_deck.py <deck-dir-or-index.html> --strict`.
-2. Render every slide at 1920x1080 and at one smaller viewport.
-3. Check no text/image overlap, clipping, unreadable labels, empty states, or broken navigation.
-4. Inspect all generated images visually; OCR alone is insufficient.
-5. Verify every important claim returns to the correct source paragraph, figure, table, formula, or experiment.
-6. Run three adversarial passes: visual design, novice teaching clarity, and source/evidence fidelity.
-7. Export PNG/PDF if requested and verify several exported pages.
-8. Deploy to Vercel only after local QA passes.
-
-## Optional Full Reader Mode
-
-Build the former chapter-switching bilingual reader only when the user asks to read substantial original text in-page or when the paper requires close reading. Reuse:
-
-- `assets/reader-runtime.js`
-- `references/reader-interactions.md`
-- `references/reader-runtime-contract.md`
-- `references/layout-and-visual-patterns.md`
-- `references/design-quality-gate.md`
-- `scripts/audit_learning_site.py`
-
-In this mode, retain paragraph-level original text, Chinese translation, plain-language explanation, inline terms, synchronized notes, figures near claims, and exact source coverage. The visual deck can link into the reader's evidence sections.
-
-## Delivery Standard
-
-The result should feel more useful than a conventional PPT because every page is visually taught, evidence-linked, self-contained enough for asynchronous reading, and still traceable to the paper. It should feel more reliable than a summary website because it does not pretend that decoration or generated diagrams are proof.
+For images/PPT, report the selected and resolved size mode plus actual count. For HTML, report complete/curated scope and source coverage. For every mode, report the image model used, strict audit result, and any intentionally omitted scope.

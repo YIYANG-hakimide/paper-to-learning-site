@@ -1,4 +1,4 @@
 interface:
-  display_name: "Paper to Learning Deck"
-  short_description: "Turn papers into visual teaching decks and explainer images"
-  default_prompt: "Use $paper-to-learning-site to turn this paper into a visual-first 16:9 teaching deck with generated explainer images, source evidence, and novice-friendly explanations."
+  display_name: "Paper to Learning"
+  short_description: "Turn papers into images, presentation PDFs, or interactive HTML"
+  default_prompt: "Use $paper-to-learning-site to explain this paper for a non-specialist college reader. Ask whether I want an image series, presentation PDF, or interactive HTML, then build the selected output with source-linked explanations."

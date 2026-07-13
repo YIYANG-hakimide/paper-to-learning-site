@@ -59,10 +59,141 @@ def sha256(path: Path) -> str:
 def image_dimensions(path: Path) -> tuple[int, int] | None:
     if Image is None:
         return None
+    try:
+        with Image.open(path) as image:
+            return image.size
+    except Exception:
+        return None
 
 
 def normalized_hash(value: object) -> str:
     return str(value or "").replace("sha256:", "").strip().lower()
+
+
+def command_path(name: str) -> str | None:
+    dependency_root = Path.home() / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies"
+    for candidate in (dependency_root / "bin" / "override" / name, dependency_root / "bin" / name):
+        if candidate.exists():
+            return str(candidate)
+    return shutil.which(name)
+
+
+def validate_pdf(pdf_path: Path, expected_pages: int, qa_dir: Path) -> list[str]:
+    issues: list[str] = []
+    if not pdf_path.exists() or pdf_path.stat().st_size < 1024:
+        return ["Final presentation PDF is missing or suspiciously small."]
+    if not pdf_path.read_bytes()[:5] == b"%PDF-":
+        issues.append("Final presentation export is not a valid PDF file.")
+        return issues
+    pdfinfo = command_path("pdfinfo")
+    if not pdfinfo:
+        issues.append("pdfinfo is unavailable; final PDF page count and dimensions cannot be verified.")
+        return issues
+    result = subprocess.run([pdfinfo, str(pdf_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+    if result.returncode != 0:
+        issues.append(f"pdfinfo could not read final PDF: {(result.stderr or result.stdout).strip()[:240]}")
+        return issues
+    pages_match = re.search(r"^Pages:\s+(\d+)", result.stdout, re.M)
+    pages = int(pages_match.group(1)) if pages_match else None
+    if pages != expected_pages:
+        issues.append(f"Final PDF page count does not match deck: pdf={pages}, slides={expected_pages}.")
+    size_match = re.search(r"^Page size:\s+([0-9.]+)\s+x\s+([0-9.]+)", result.stdout, re.M)
+    if not size_match:
+        issues.append("Could not verify final PDF page dimensions.")
+    else:
+        width, height = float(size_match.group(1)), float(size_match.group(2))
+        if height <= 0 or abs((width / height) - (16 / 9)) > 0.03:
+            issues.append(f"Final PDF page ratio is not 16:9: {width}x{height}.")
+    renderer = command_path("pdftoppm")
+    if renderer and pages:
+        qa_dir.mkdir(parents=True, exist_ok=True)
+        for page_number in sorted({1, max(1, (pages + 1) // 2), pages}):
+            output_stem = qa_dir / f"pdf-page-{page_number:03d}"
+            render = subprocess.run(
+                [renderer, "-f", str(page_number), "-l", str(page_number), "-singlefile", "-png", "-r", "72", str(pdf_path), str(output_stem)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=60,
+            )
+            rendered = output_stem.with_suffix(".png")
+            if render.returncode != 0 or not rendered.exists() or rendered.stat().st_size < 1024:
+                issues.append(f"Failed to render representative PDF page {page_number}.")
+    return issues
+
+
+def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: str, errors: list[str]) -> int:
+    meta = manifest.get("teaching_fidelity", {})
+    rel = meta.get("inventory_path")
+    if not rel or not (root / str(rel)).exists():
+        errors.append("Missing data/teaching-inventory.json or teaching_fidelity.inventory_path.")
+        return 0
+    path = root / str(rel)
+    try:
+        inventory = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        errors.append("Teaching inventory is invalid JSON.")
+        return 0
+    if normalized_hash(meta.get("inventory_sha256")) != sha256(path):
+        errors.append("Teaching inventory hash is missing or incorrect.")
+    if inventory.get("derivation_checked") is not True or inventory.get("reviewer_status") != "passed":
+        errors.append("Teaching inventory derivation/review has not passed.")
+    if normalized_hash(inventory.get("source_inventory_sha256")) != normalized_hash(manifest.get("source_fidelity", {}).get("main_text_inventory_sha256")):
+        errors.append("Teaching inventory is not linked to the current source inventory hash.")
+    if not inventory.get("hard_concepts"):
+        errors.append("Teaching inventory must identify at least one hard concept.")
+    if not inventory.get("central_claims"):
+        errors.append("Teaching inventory must identify at least one central claim.")
+    groups = {
+        "hard_concepts": "hard_concept_coverage",
+        "formula_or_algorithm_items": "formula_coverage",
+        "experiments": "experiment_coverage",
+        "major_figures": "major_figure_coverage",
+        "central_claims": "central_claim_coverage",
+    }
+    for inventory_key, coverage_key in groups.items():
+        entries = inventory.get(inventory_key)
+        coverage = manifest.get(coverage_key)
+        if not isinstance(entries, list):
+            errors.append(f"Teaching inventory must contain {inventory_key}[].")
+            continue
+        if not isinstance(coverage, list):
+            errors.append(f"Manifest must contain {coverage_key}[].")
+            continue
+        by_id = {str(item.get("inventory_id")): item for item in coverage if isinstance(item, dict) and item.get("inventory_id")}
+        for entry in entries:
+            item_id = str(entry.get("id", ""))
+            item = by_id.get(item_id)
+            if not item:
+                errors.append(f"Teaching inventory item has no coverage entry: {inventory_key}:{item_id}")
+                continue
+            status = item.get("status")
+            level = entry.get("required_level", "core")
+            omission_allowed = level == "secondary" or (level == "major" and size_mode == "concise")
+            if status == "omitted":
+                if not omission_allowed or not item.get("reason"):
+                    errors.append(f"Required teaching item was omitted without an allowed reason: {inventory_key}:{item_id}")
+            elif status != "covered" or not item.get("final_item_ids"):
+                errors.append(f"Teaching coverage must be covered with final_item_ids: {inventory_key}:{item_id}")
+    central_claim_ids = {str(item.get("id")) for item in inventory.get("central_claims", []) if item.get("id")}
+    bundles = manifest.get("evidence_bundles", [])
+    bundle_claim_ids = {str(item.get("claim_id")) for item in bundles if isinstance(item, dict) and item.get("claim_id")}
+    missing = central_claim_ids - bundle_claim_ids
+    if missing:
+        errors.append(f"Central claims are missing evidence bundles: {sorted(missing)}")
+    for bundle in bundles:
+        for field in ("bundle_id", "claim_id", "final_item_ids", "source_ids", "source_excerpt_or_asset", "visible_source_cue", "chinese_explanation", "evidence_meaning", "limitation", "source_cue_dom_id"):
+            if not bundle.get(field):
+                errors.append(f"Evidence bundle is missing {field}.")
+        cue_id = str(bundle.get("source_cue_dom_id", ""))
+        if cue_id and not re.search(rf'id=["\']{re.escape(cue_id)}["\']', html):
+            errors.append(f"Evidence bundle source cue is not visible in HTML: {cue_id}")
+    levels = {"concise": {"core"}, "medium": {"core", "major"}, "detailed": {"core", "major", "secondary"}}
+    return sum(
+        1
+        for item in inventory.get("hard_concepts", [])
+        if item.get("visual_needed") is True and item.get("required_level", "core") in levels.get(size_mode, {"core"})
+    )
 
 
 def browser_probe(html_path: Path, output_dir: Path) -> tuple[dict | None, str | None]:
@@ -121,13 +252,25 @@ const { pathToFileURL } = require('url');
         const box = img.getBoundingClientRect();
         return { width: Math.round(box.width), height: Math.round(box.height), naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight };
       });
+      const generatedVisuals = [...slide.querySelectorAll('[data-generated-visual-id] img, img[data-generated-visual-id], figure[data-generated-visual-id] img')].map(img => {
+        const box = img.getBoundingClientRect();
+        return { width: Math.round(box.width), height: Math.round(box.height), areaRatio: (box.width * box.height) / (1920 * 1080) };
+      });
+      const bodyText = [...slide.querySelectorAll('h1,h2,h3,p,li,blockquote,td,th,.label,.caption')]
+        .filter(el => !el.closest('.footnote,.citation,footer'));
+      const projectedFonts = bodyText.map(el => parseFloat(getComputedStyle(el).fontSize || '0') * (1366 / 1920)).filter(Boolean);
+      const nestedCards = slide.querySelectorAll('[class~="card"] [class~="card"], [data-card] [data-card]').length;
       return {
         scrollWidth: slide.scrollWidth,
         scrollHeight: slide.scrollHeight,
         clientWidth: slide.clientWidth,
         clientHeight: slide.clientHeight,
         brokenImages,
-        images
+        images,
+        generatedVisuals,
+        textChars: (slide.innerText || '').replace(/\s+/g, '').length,
+        projectedMinBodyPx: projectedFonts.length ? Math.min(...projectedFonts) : null,
+        nestedCards
       };
     });
     const screenshot = path.join(outputDir, `slide-${String(index + 1).padStart(2, '0')}.png`);
@@ -155,18 +298,12 @@ const { pathToFileURL } = require('url');
         return json.loads(result.stdout), None
     except Exception as exc:
         return None, f"Browser rendering returned invalid JSON: {exc}"
-    try:
-        with Image.open(path) as image:
-            return image.size
-    except Exception:
-        return None
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit a paper learning deck.")
     parser.add_argument("path", help="Deck directory or index.html")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--skip-browser", action="store_true")
+    parser.add_argument("--require-pdf", action="store_true", help="Require the final presentation PDF export")
     args = parser.parse_args()
 
     root, html_path = locate(Path(args.path).expanduser().resolve())
@@ -186,7 +323,7 @@ def main() -> int:
         match = re.search(r'data-slide-id=["\']([^"\']+)["\']', tag, re.I)
         if match:
             html_slide_ids.append(match.group(1))
-    if len(slides) < 8:
+    if len(slides) < 6:
         errors.append(f"Too few detectable slides for a teaching deck: {len(slides)}")
 
     if "1920" not in html or "1080" not in html:
@@ -220,10 +357,26 @@ def main() -> int:
     elif manifest.get("_invalid"):
         errors.append("Invalid learning-deck-manifest.json")
     else:
+        if str(manifest.get("manifest_schema_version")) != "0.3":
+            errors.append("Deck manifest schema version must be 0.3.")
+        if manifest.get("output_mode") != "presentation-pdf":
+            errors.append("Deck manifest output_mode must be presentation-pdf.")
+        size_mode = manifest.get("size_mode")
+        if size_mode not in {"concise", "medium", "detailed"}:
+            errors.append("Deck manifest must record resolved size_mode.")
+        if manifest.get("size_mode_requested") == "automatic":
+            sizing = manifest.get("automatic_sizing", {})
+            for field in ("complexity_score", "score_breakdown", "target_min", "target_max", "maximum_count", "resolved_count", "rationale"):
+                if sizing.get(field) in (None, "", []):
+                    errors.append(f"Automatic sizing is missing {field}.")
         expected_slides = manifest.get("slides_expected")
         rendered_slides = manifest.get("slides_rendered")
         slide_items = manifest.get("slides", [])
         manifest_slide_ids = [str(item.get("id")) for item in slide_items if item.get("id")]
+        if manifest.get("size_mode_requested") == "automatic":
+            sizing = manifest.get("automatic_sizing", {})
+            if sizing.get("resolved_count") != len(slide_items) or not sizing.get("target_min", 0) <= len(slide_items) <= sizing.get("target_max", 0):
+                errors.append("Automatic page count is outside its recorded target range or resolved_count.")
         if isinstance(expected_slides, int) and isinstance(rendered_slides, int) and rendered_slides < expected_slides:
             errors.append(f"Manifest reports missing slides: {rendered_slides}/{expected_slides}")
         if isinstance(expected_slides, int) and len(slide_items) != expected_slides:
@@ -234,6 +387,15 @@ def main() -> int:
             errors.append("Every HTML slide must have a stable data-slide-id.")
         elif html_slide_ids != manifest_slide_ids:
             errors.append("HTML data-slide-id order does not match manifest slide order.")
+        if size_mode == "concise" and (len(slide_items) > 10 or (len(slide_items) < 6 and not manifest.get("shorter_user_approved"))):
+            errors.append("Concise presentation must contain 6-10 pages unless a shorter set was explicitly approved.")
+        if size_mode == "medium" and not 11 <= len(slide_items) <= 20:
+            errors.append("Medium presentation must contain 11-20 pages.")
+        if size_mode == "detailed" and len(slide_items) < 21:
+            errors.append("Detailed presentation must contain at least 21 pages.")
+        if len(slide_items) > 36 and not manifest.get("over_36_user_approved"):
+            errors.append("Presentation exceeds 36 pages without explicit approval.")
+        derived_teaching_visual_floor = audit_teaching_coverage(root, manifest, size_mode, html, errors)
 
         storyboard_meta = manifest.get("storyboard", {})
         storyboard_rel = storyboard_meta.get("path")
@@ -269,10 +431,31 @@ def main() -> int:
 
         layout_counts: dict[str, int] = {}
         content_slide_count = 0
+        evidence_dense_streak = 0
+        max_evidence_dense_streak = 0
+        low_density_count = 0
+        section_reset_count = 0
         for slide in slide_items:
             for field in ("id", "type", "learner_question", "one_sentence_answer", "layout_family"):
                 if not slide.get(field):
                     errors.append(f"Slide inventory entry is missing {field}.")
+            for field in ("presentation_beat", "spoken_takeaway", "density_class", "reveal_order", "estimated_seconds"):
+                if slide.get("type") not in {"title", "evidence-appendix"} and slide.get(field) in (None, "", []):
+                    errors.append(f"Presentation slide {slide.get('id')} is missing {field}.")
+            if slide.get("type") not in {"title", "evidence-appendix"} and "section_reset" not in slide:
+                errors.append(f"Presentation slide {slide.get('id')} is missing section_reset.")
+            density = slide.get("density_class")
+            if density == "evidence-dense":
+                evidence_dense_streak += 1
+                max_evidence_dense_streak = max(max_evidence_dense_streak, evidence_dense_streak)
+            else:
+                evidence_dense_streak = 0
+            if density == "low":
+                low_density_count += 1
+            if slide.get("section_reset") is True:
+                section_reset_count += 1
+            if slide.get("estimated_seconds") not in (None, "") and (not isinstance(slide.get("estimated_seconds"), (int, float)) or slide.get("estimated_seconds") <= 0):
+                errors.append(f"Presentation slide {slide.get('id')} has invalid estimated_seconds.")
             if slide.get("type") not in {"title", "divider", "recap", "evidence-appendix"}:
                 content_slide_count += 1
                 family = str(slide.get("layout_family", ""))
@@ -281,12 +464,18 @@ def main() -> int:
             dominant_family, dominant_count = max(layout_counts.items(), key=lambda item: item[1])
             if dominant_count / content_slide_count > 0.60 and not manifest.get("layout_repetition_rationale"):
                 errors.append(f"One layout family dominates {dominant_count}/{content_slide_count} teaching slides without rationale: {dominant_family}")
+        if max_evidence_dense_streak > 3:
+            errors.append("Presentation contains more than three consecutive evidence-dense pages without a reset.")
+        if low_density_count == 0:
+            errors.append("Presentation has no low-density emphasis or transition page.")
+        if size_mode in {"medium", "detailed"} and section_reset_count < 2:
+            errors.append("Medium/detailed presentation needs at least two visible section resets.")
 
         visuals = manifest.get("generated_visuals", [])
         expected_visuals = manifest.get("generated_visuals_expected")
         hard_concepts = [item for item in manifest.get("hard_concepts", []) if item.get("visual_needed", True)]
         logic_units = manifest.get("logic_units", [])
-        derived_visual_floor = max(len(hard_concepts), len(logic_units))
+        derived_visual_floor = max(len(hard_concepts), len(logic_units), derived_teaching_visual_floor)
         if isinstance(expected_visuals, int) and expected_visuals < derived_visual_floor:
             errors.append(f"generated_visuals_expected is below the derived concept/chapter floor: {expected_visuals}/{derived_visual_floor}")
         if isinstance(expected_visuals, int) and len(visuals) < expected_visuals:
@@ -415,6 +604,10 @@ def main() -> int:
                 for field in ("evidence_id", "evidence_kind", "dom_id", "supports_vs_illustrates"):
                     if not evidence.get(field):
                         errors.append(f"Claim evidence item is missing {field}.")
+            if not claim.get("visible_source_cue") or not claim.get("source_cue_dom_id"):
+                errors.append("Claim evidence entry lacks a reader-visible source cue.")
+            elif not re.search(rf'id=["\']{re.escape(str(claim.get("source_cue_dom_id")))}["\']', html):
+                errors.append(f"Claim source cue DOM id is not visible in HTML: {claim.get('source_cue_dom_id')}")
             if claim.get("claim_role") == "supported_conclusion":
                 supporting = [item for item in evidence_items if item.get("supports_vs_illustrates") == "supports" and item.get("evidence_kind") != "generated_visual"]
                 if not supporting:
@@ -425,8 +618,10 @@ def main() -> int:
 
         style = manifest.get("design_brief", {})
         for field in (
+            "art_direction_thesis",
             "paper_motif",
             "motif_source_basis",
+            "topic_specific_objects",
             "visual_direction",
             "typography_plan",
             "evidence_style",
@@ -438,13 +633,57 @@ def main() -> int:
                 errors.append(f"Design brief is missing {field}.")
 
         qa = manifest.get("qa", {})
-        for field in ("fixed_stage_checked", "all_slides_rendered", "small_viewport_checked", "visual_inspection_complete", "full_deck_contact_sheet_checked"):
+        for field in (
+            "fixed_stage_checked",
+            "all_slides_rendered",
+            "small_viewport_checked",
+            "visual_inspection_complete",
+            "full_deck_contact_sheet_checked",
+            "presentation_read_aloud_checked",
+            "presentation_rhythm_checked",
+            "projected_legibility_checked",
+        ):
             if qa.get(field) is not True:
                 errors.append(f"Deck QA has not passed {field}.")
         if qa.get("orphan_generated_visuals") != 0:
             errors.append("Deck QA reports orphan generated visuals.")
         if len(qa.get("adversarial_passes", [])) < 3:
             errors.append("Deck QA does not record all three adversarial review passes.")
+        contact_sheet_rel = qa.get("contact_sheet_path")
+        if not contact_sheet_rel or not (root / str(contact_sheet_rel)).exists():
+            errors.append("Deck QA does not provide a real full-deck contact sheet.")
+        elif Image is not None:
+            try:
+                with Image.open(root / str(contact_sheet_rel)) as contact_sheet:
+                    contact_sheet.verify()
+            except Exception:
+                errors.append("Full-deck contact sheet is not a valid image.")
+        qa_report_path = root / "qa" / "qa-report.json"
+        if not qa_report_path.exists():
+            errors.append("Missing qa/qa-report.json.")
+        else:
+            try:
+                qa_report = json.loads(qa_report_path.read_text(encoding="utf-8"))
+            except Exception:
+                qa_report = {}
+            if not qa_report:
+                errors.append("Invalid qa/qa-report.json.")
+            else:
+                if qa_report.get("final_status") not in {"passed", "clean"}:
+                    errors.append("QA report final_status is not passed/clean.")
+                if qa_report.get("unresolved_blockers") or qa_report.get("remaining_errors"):
+                    errors.append("QA report still contains unresolved blockers or errors.")
+        if args.require_pdf:
+            exports = manifest.get("exports", {})
+            pdf_rel = exports.get("pdf_path")
+            if not pdf_rel:
+                errors.append("Final presentation PDF export is missing.")
+            else:
+                pdf_path = root / str(pdf_rel)
+                errors.extend(validate_pdf(pdf_path, len(slide_items), root / "qa" / "pdf-render-check"))
+                declared_pdf_hash = normalized_hash(exports.get("pdf_sha256"))
+                if pdf_path.exists() and (not declared_pdf_hash or declared_pdf_hash != sha256(pdf_path)):
+                    errors.append("Final PDF hash is missing or does not match the exported file.")
 
     if len(local_bitmap_refs) < 4:
         warnings.append(f"Only {len(local_bitmap_refs)} local bitmap images are embedded; visual-first coverage may be weak.")
@@ -482,6 +721,15 @@ def main() -> int:
                 for image in result.get("images", []):
                     if image.get("width", 0) < 160 or image.get("height", 0) < 90:
                         errors.append(f"Slide {index} contains an unreadably small rendered image: {image.get('width')}x{image.get('height')}.")
+                generated = result.get("generatedVisuals", [])
+                if generated and max(item.get("areaRatio", 0) for item in generated) < 0.20:
+                    errors.append(f"Slide {index} generated teaching visual occupies less than 20% of the page.")
+                if result.get("textChars", 0) > 900:
+                    errors.append(f"Slide {index} is too text-dense for presentation mode: {result.get('textChars')} visible characters.")
+                if result.get("projectedMinBodyPx") is not None and result.get("projectedMinBodyPx") < 12:
+                    errors.append(f"Slide {index} body text becomes too small at 1366x768 projection: {result.get('projectedMinBodyPx'):.1f}px.")
+                if result.get("nestedCards", 0) > 0:
+                    errors.append(f"Slide {index} contains nested card-like components, which harms presentation hierarchy.")
 
     if args.strict:
         errors.extend(warnings)
