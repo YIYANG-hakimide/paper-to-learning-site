@@ -5,7 +5,7 @@
 Ask before implementation unless the user already answered or explicitly asked to proceed with defaults:
 
 1. 是否有想重点探讨、重点解释、或者希望读者特别关注的内容？
-2. 是先返回本地 HTML，还是需要部署到 Vercel？
+2. 需要本地 HTML、PNG/PDF 图集，还是还要部署到 Vercel？
 3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
 
 If the user is impatient or says "直接做", use defaults and state them briefly before starting.
@@ -25,6 +25,21 @@ Create a working inventory before designing:
 - reader pain points likely to block comprehension
 - available tools from preflight: extraction, figure rendering, Image 2/image generation, browser QA, deployment
 
+## Teaching Deck Outline
+
+Before designing, convert the paper into learner questions. For every planned slide, record:
+
+- learner question
+- one-sentence answer
+- prerequisite dependency
+- source ids and page numbers
+- visual teaching job
+- generated illustration or source evidence
+- misconception to prevent
+- next-slide bridge
+
+Default to a reading-first 18-36 slide deck. Use more slides when the paper has multiple prerequisites, a long method pipeline, composite figures, or several experimental claims.
+
 ## Paper-Specific Design Brief
 
 Before implementation, write a design brief with concrete rules, not mood words:
@@ -34,16 +49,25 @@ Before implementation, write a design brief with concrete rules, not mood words:
 - typography roles for original text, Chinese reading, plain explanation, notes, captions, controls, formulas/code
 - color semantics for terms, evidence, limitations, definitions, and active state
 - spacing rhythm, source-text line width, and reading density
-- component rules for reading blocks, side notes, term panels, figure modules, chapter reviews, and large-image views
-- responsive behavior: desktop, tablet, mobile, touch target size, panel collapse strategy
+- component rules for title, concept, method, worked-example, evidence, formula, comparison, recap, and source slides
+- fixed-stage behavior: 1920x1080 composition, viewport scaling, navigation, overview, fullscreen, and reduced motion
 - figure/table strategy: large view, split panels, image-top/text-bottom, or redraw/annotation approach
 - what this paper-specific site should avoid, such as generic AI gradients, dashboard grids, tiny figures, or decorative images
 
 This is inspired by design-system `DESIGN.md` files: colors, typography, components, and states should be explicit enough that another agent can implement them.
 
-## Completeness rule
+## Completeness Rule
 
-The learning site must not become a summary-only product. For every included main-section paragraph, provide:
+The deck must not be built from only the abstract or selected convenient snippets. Inventory the whole main paper, then ensure every central claim, method component, important figure/table, and limitation is represented in the learning path.
+
+For default deck mode:
+
+- main slides explain and visualize the paper's logic
+- evidence slides preserve important original quotations, figures, tables, formulas, and page references
+- each important claim links to exact source ids
+- longer original text may live in evidence slides or the optional full reader
+
+For optional complete-reader mode, every included main-section paragraph still needs:
 
 - original paragraph or faithful source text
 - translation if the source is not Chinese
@@ -54,9 +78,18 @@ For very long papers, deliver in stages only after telling the user exactly what
 
 Do not satisfy "complete paper text" by hiding raw extraction inside a collapsed `<pre>` block. The main reader must expose paragraph-level source text paired with translation/explanation. Collapsed raw source can be a secondary appendix only.
 
-## Architecture decision
+## Architecture Decision
 
-Default to a chapter-switching reader:
+Default to a fixed-stage visual teaching deck:
+
+- one learner question per slide
+- generated teaching images as large primary objects
+- source evidence slides for tables, figures, formulas, and quotations
+- chapter/logic-unit divider and recap slides
+- overview and direct navigation
+- optional evidence panel or linked complete reader
+
+Build a chapter-switching reader only when the user explicitly asks for extensive in-page source reading:
 
 - top or side chapter map
 - right/main reading pane with original/translation/explanation
@@ -74,4 +107,4 @@ Adapt when the source suggests a better form:
 
 ## Naming
 
-Use `Learn <paper short title>` for the page title, package folder, and Vercel project name unless the user provides a name.
+Use `Learn <paper short title>` for the deck title, package folder, and Vercel project name unless the user provides a name.

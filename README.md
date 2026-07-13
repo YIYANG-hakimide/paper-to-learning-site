@@ -1,305 +1,117 @@
-# Paper to Learning Site
+# Paper to Learning Deck
 
-> Turn papers and difficult long-form articles into interactive, bilingual learning websites.
+> Turn difficult papers into visual-first teaching decks and explainer-image sequences.
 >
-> 把论文和难读长文变成可阅读、可交互、可部署的双语学习网站。
+> 把难读论文变成一套真正讲得清楚的视觉讲解图集。
 
-[![Version](https://img.shields.io/badge/version-v0.1.2-2563eb)](https://github.com/YIYANG-hakimide/paper-to-learning-site/releases/tag/v0.1.2)
+[![Version](https://img.shields.io/badge/version-v0.2.0-2563eb)](https://github.com/YIYANG-hakimide/paper-to-learning-site)
 [![Codex Skill](https://img.shields.io/badge/Codex-Skill-111827)](./SKILL.md)
-[![Static Site](https://img.shields.io/badge/output-static%20HTML-16a34a)](#what-it-builds--它会生成什么)
+[![Output](https://img.shields.io/badge/output-HTML%20%7C%20PNG%20%7C%20PDF%20%7C%20Vercel-16a34a)](#输出)
 
 ## 中文介绍
 
-`paper-to-learning-site` 是一个 Codex skill，用来把一篇学术论文、PDF、研究报告或难读长文，转成一个完整的交互式学习网页。
+`paper-to-learning-site` 现在以“论文视觉讲解图集”为主产品：先完整理解论文，再把它重构成一套面向非专业读者的 16:9 网页式讲解 PPT。每一页回答一个具体问题，并通过 Image 2 或其他生图模型生成的解释图、论文原图、数据证据、公式拆解和通俗说明，带读者一步步看懂整篇论文。
 
-它的目标不是生成一页“论文总结”，也不是把 PDF 简单嵌进网页了事，而是做成一个真正能帮助人读懂内容的阅读产品：
+它不是摘要生成器，也不是把 PDF 塞进网页。目标是做出比普通教学 PPT 更清楚、比漂亮信息图更可信的学习材料。
 
-- 网页里能直接读到原文，而不是只能跳转 PDF。
-- 非中文材料提供中英对照；中文材料保留原文，并补充“说人话”解释。
-- 关键术语跟随正文出现，点击即可展开解释。
-- 图表和实验结果放在对应论证位置，而不是堆在页面最后。
-- 每个难点尽量配 Image 2 生成的解释图、流程图、示意图或类比图。
-- 每个正文阅读块都尽量有可追溯的段落锚点，方便术语、旁注、图表和原文互相回跳。
-- 原文与中文解释的排版不固定死板：可以左右对照、上下堆叠、逐句精读、图表先行，也可以在公式/表格处使用“原文截图 + 可选文字”的组合。
-- 截图只能辅助保留公式、表格、多栏排版或原论文视觉上下文，不能替代可复制、可搜索、可解释的正文文字。
-- 默认面向“没有专业背景的大学生”，从基础概念讲起。
+## 核心能力
 
-## 它适合什么场景
+- 完整提取论文主文，建立章节、概念、图表和论点证据清单。
+- 按读者真正会提出的问题重组叙事，不机械照搬论文目录。
+- 默认面向“无专业背景大学生”，从先修概念开始解释。
+- 一页解决一个认知问题，复杂内容自动拆成多页。
+- 重点使用 Image 2 / `gpt-image-2` 或其他可用生图模型生成讲解图。
+- 每篇论文根据题材选择视觉风格，不套统一模板。
+- 论文小镇、Agent、游戏世界可以用像素风；历史主题可以使用克制的古籍、档案、地图或水墨语言；生物、系统、社会科学等各自选择更合适的视觉表达。
+- 重要图表逐张、逐面板解释：怎么看、相比谁、结论、意义与限制。
+- 生成图只负责解释，论文原文、图表、公式和实验才负责证明。
+- 交付可翻页 HTML、逐页 PNG、PDF，并可部署到 Vercel。
+- 需要精读时，可额外生成完整中英对照原文阅读器。
 
-- 想把一篇论文做成可分享的学习网页。
-- 想帮助非专业读者理解 AI、计算机、社会科学、商业、设计等领域的复杂文章。
-- 想把 PDF 阅读体验改造成“章节地图 + 双语正文 + 旁注 + 术语弹窗 + 图表解读”的交互式阅读器。
-- 想生成一个可本地打开、也可部署到 Vercel 的静态 HTML 网站。
-
-## 它会生成什么
-
-默认产物是一个静态网页项目，通常长这样：
+## 输出
 
 ```text
 learn-paper-title/
   index.html
   assets/
-    figures/      # 原论文图表、截图、裁剪后的子图
-    diagrams/     # Image 2 生成的解释图、流程图、示意图
-    screenshots/  # 页面检查或视觉证据
-  data/           # 可选：章节、段落、术语、图表的结构化数据
+    visuals/       # 生图模型生成的讲解图
+    evidence/      # 论文图表、公式、截图和证据
+    exports/       # 可选 PNG/PDF
+  data/
+    source-inventory.json
+    learning-deck-manifest.json
+  qa/
+    screenshots/
+    qa-report.json
 ```
 
-网页体验默认包括：
+默认生成 18-36 页阅读型图集，支持键盘翻页、目录概览、进度、全屏和直接跳页。内容复杂时增加页数，不通过缩小文字强塞。
 
-- 章节地图或章节切换阅读器
-- 原文 / 中文翻译 / 说人话解释
-- 按章节内容选择的阅读排版：左右对照、上下对照、逐句精读、图表先行、排版截图加可选文字
-- 跟随正文出现的术语弹窗
-- 跟随段落变化的旁注或学习面板
-- 图表抽屉、图表热点或左右对照解读
-- 公式拆解、方法时间线、概念地图、对比表、本章核心要点回顾、Feynman 式自我解释卡
-- 每章逻辑总结、学习检查点和下一章衔接
-- 桌面与移动端可读的响应式布局
+## 讲解标准
 
-## 核心标准
+每个难点按以下顺序解释：
 
-这个 skill 会强制关注这些质量线：
+1. 专业术语本身是什么意思。
+2. 用生活化方式怎么理解。
+3. 它在本文中具体指什么。
+4. 作者在哪里、怎样使用它。
+5. 最容易产生什么误解。
 
-1. **必须能读原文**
-   不能只给摘要，也不能把 PDF iframe 当作主要阅读方式。
+每个重要结论必须说明：相比什么、衡量什么、结果如何变化、证据在哪里，以及不能推出什么。
 
-2. **必须解释难点**
-   术语解释按这个顺序来：术语本义 -> 说人话 -> 本文指代 -> 作者怎么用 -> 常见误解。
+## 图片标准
 
-3. **必须讲清图表**
-   每个图表都要解释：它是什么、怎么看、相比谁、结论是什么、为什么重要、不能推出什么。
-
-4. **必须有视觉化辅助**
-   每章至少一张解释图；重要难点尽量用 Image 2 生成流程图、系统图、类比图或报告式图解。
-
-5. **必须按内容选择排版**
-   摘要、方法、公式、实验、相关工作不应该都长得一样。左右双栏不是唯一答案；密集段落可以上下对照，公式可以逐句拆，实验可以先看图表再读结论。
-
-6. **截图不能替代正文**
-   可以截原论文里的公式、表格、多面板图或排版敏感片段，但必须配可选文字、中文翻译/解释、段落锚点和截图理由。
-
-7. **必须做可用性检查**
-   交互要能打开和关闭，文字不能遮挡，图表不能断链，英文长段不能只有很短中文解释。
+- 每个重大难点只要适合可视化，就生成一张或多张解释图。
+- 复杂机制拆成多张小图，不制作一张看不清的巨型海报。
+- 中文读者默认使用中文主导的图内标签。
+- 图内只保留短标签和少量提示，长解释与精确数据放在 HTML 中。
+- 图片必须保存为本地 PNG/JPEG/WebP 并真实嵌入成品。
+- 如果没有 Image 2，可接入其他真实生图模型；必须记录实际模型名称。
+- 没有任何生图路线时会明确报告，不会偷偷用占位图或 SVG 冒充。
 
 ## 安装
 
-推荐安装到 Codex 全局 skill 目录：
-
 ```bash
 git clone https://github.com/YIYANG-hakimide/paper-to-learning-site.git ~/.codex/skills/paper-to-learning-site
 ```
 
-如果你使用 skills CLI，也可以尝试：
+也可以尝试：
 
 ```bash
 npx skills add -g YIYANG-hakimide/paper-to-learning-site
 ```
 
-安装后建议新开一个 Codex 对话，或重启 Codex，让 skill 出现在可用能力列表中。
-
-## 使用方式
-
-在 Codex 中可以这样说：
+## 使用
 
 ```text
-Use $paper-to-learning-site to turn this paper into an interactive bilingual learning website.
-默认读者是没有专业背景的大学生。请先做本地 HTML，不用部署。
+用 $paper-to-learning-site 把这篇论文做成一套视觉讲解图集。
+默认面向没有专业背景的大学生，多用 Image 2 生成解释图。
+先生成本地 HTML 和逐页 PNG/PDF，不用部署。
 ```
 
-中文也可以：
+如果希望精读原文：
 
 ```text
-用 $paper-to-learning-site 把这篇论文做成一个交互式学习网站。
-需要中英文对照，重点解释术语、实验和图表。
-读者默认是没有 AI / 计算机背景的大学生。
-先给我本地 HTML，确认后再部署 Vercel。
+除了视觉讲解图集，再增加完整的中英文对照原文证据层。
 ```
 
-启动时，skill 会优先确认三个问题：
+开始前，skill 默认确认：重点关注内容、交付方式、读者认知水平。
 
-1. 有没有想重点探讨、重点解释或特别关注的内容？
-2. 是先返回本地 HTML，还是需要部署到 Vercel？
-3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
-
-如果你说“直接按默认开始”，它会默认完整解释难点和实验，先生成本地静态 HTML。
-
-## 自检脚本
-
-仓库内置了一个基础静态站点检查脚本：
-
-开工前先检查工具链：
+## 自检
 
 ```bash
-python3 ~/.codex/skills/paper-to-learning-site/scripts/preflight_learning_site.py
+python3 ~/.codex/skills/paper-to-learning-site/scripts/preflight_learning_site.py --source <paper.pdf>
+python3 ~/.codex/skills/paper-to-learning-site/scripts/audit_learning_deck.py <deck-dir-or-index.html> --strict
 ```
 
-交付前检查网页：
+完整阅读器模式额外运行：
 
 ```bash
 python3 ~/.codex/skills/paper-to-learning-site/scripts/audit_learning_site.py <site-dir-or-index.html> --strict
 ```
 
-它会检查：
+## English
 
-- 本地图片是否缺失
-- `id` 是否重复
-- 图片是否缺少 `alt`
-- 是否把 PDF iframe 当成主要阅读方式
-- 是否缺少明显的“原文”或“说人话”阅读层
-- 是否把全文藏在折叠的 `<pre>` 原文块里
-- 是否缺少中英 / 中文 / EN only 这类语言模式
-- 是否用 SVG 小框图替代 Image 2 生成图
-- 是否缺少 `data/learning-site-manifest.json`
-- 是否缺少 `layout_strategy`、`source_rendering_modes`、`source_screenshot_blocks`、`interaction_inventory` 等可审计证据
-- 是否用原文截图替代可选文字
-- 是否把“面向无专业背景大学生”“Generated”“生成教学图资产”“preflight”“manifest”等制作过程文案暴露给读者
-- 术语是否只出现在段后标签，而没有嵌在原文/译文/解释的具体词位上
-- 阅读块是否缺少稳定 `data-source-id`
-- 图表按钮是否都是“打开图表抽屉”这类无法理解的重复泛称
-- 生成图是否记录中文主导、Image 2/图像模型来源和对应段落
-- 每章是否有真实学习动作，例如拆公式、读图表、对比 baseline、回顾本章核心要点、看概念图
+`paper-to-learning-site` is now a visual-first paper teaching skill. It inventories the full paper, reconstructs its logic around learner questions, and produces a reading-first 16:9 HTML deck with generated explainer images, source evidence, figure/table interpretation, and novice-friendly teaching.
 
-这个脚本不是完整 QA，但会把“看起来内容很多、实际不帮助阅读”的常见坏味道提前拦下来。
-
-## 维护与更新
-
-如果你是在本机维护这个 skill：
-
-```bash
-cd ~/.codex/skills/paper-to-learning-site
-git pull
-# 修改 SKILL.md / references / scripts
-git add .
-git commit -m "Improve paper learning site guidance"
-git push
-```
-
-发布新版本时，可以打 tag：
-
-```bash
-git tag v0.1.2
-git push origin main v0.1.2
-```
-
----
-
-## English Introduction
-
-`paper-to-learning-site` is a Codex skill for transforming academic papers, PDFs, research reports, and dense long-form articles into complete interactive learning websites.
-
-It is not meant to produce a thin summary page or a PDF wrapper. It is designed to create a guided reading product where learners can read the source text, follow bilingual explanations, explore terms, inspect figures, and understand the argument step by step.
-
-## Best For
-
-- Turning a paper into a shareable learning website.
-- Helping non-specialist readers understand complex AI, computer science, social science, business, or design materials.
-- Replacing passive PDF reading with a chapter-map reader, bilingual text, margin notes, term popovers, and figure explanations.
-- Producing a local static HTML site that can later be deployed to Vercel.
-
-## What It Builds
-
-The default output is a static website:
-
-```text
-learn-paper-title/
-  index.html
-  assets/
-    figures/      # original paper figures, screenshots, cropped subfigures
-    diagrams/     # generated explanatory diagrams
-    screenshots/  # validation screenshots or visual evidence
-  data/           # optional structured chapter/paragraph/term/figure data
-```
-
-The reader experience usually includes:
-
-- chapter map or section-switching reader
-- original text, Chinese translation, and plain-language explanation
-- section-appropriate source layouts: parallel, stacked, interleaved close reading, figure-led, or facsimile-plus-selectable-text
-- inline term popovers
-- synchronized side notes or learning panel
-- figure drawers, figure hotspots, or side-by-side figure interpretation
-- formula breakdowns, method timelines, concept maps, comparison tables, chapter core recaps, and Feynman-style review cards
-- chapter logic summaries, learning checkpoints, and next-chapter bridges
-- responsive layout for desktop and mobile
-
-## Quality Bar
-
-The skill pushes for these standards:
-
-1. **Source text must be readable in-page**
-   A PDF iframe cannot be the primary reading experience.
-
-2. **Hard concepts must be explained from first principles**
-   Term explanations should cover: field definition, plain-language analogy, paper-specific meaning, how the author uses it, and common misunderstandings.
-
-3. **Figures and tables must be explained near the argument**
-   Each figure/table should answer: what it is, how to read it, what it compares against, what conclusion it supports, why it matters, and what it does not prove.
-
-4. **Visual teaching aids are expected**
-   Use Image 2 or another available image-generation model for flowcharts, system maps, metaphors, report-style diagrams, and experiment explainers.
-
-5. **Layout should follow the content**
-   Abstracts, methods, formulas, experiments, and related work should not all use the same card rhythm. Side-by-side bilingual columns are only one option; dense prose may read better stacked, formulas may need close reading, and result sections may need figure-first layouts.
-
-6. **Screenshots must not replace text**
-   Cropped original-paper screenshots are useful for formulas, tables, multi-panel figures, or layout context, but they must be paired with selectable source text, Chinese reading/explanation, anchors, and a reason.
-
-7. **The site must be usable**
-   Interactions need open/close states, text must not overlap, images must load, and long English passages need proportional Chinese explanation.
-
-## Installation
-
-Install into the global Codex skills directory:
-
-```bash
-git clone https://github.com/YIYANG-hakimide/paper-to-learning-site.git ~/.codex/skills/paper-to-learning-site
-```
-
-If you use a skills CLI, you can also try:
-
-```bash
-npx skills add -g YIYANG-hakimide/paper-to-learning-site
-```
-
-After installation, start a new Codex conversation or restart Codex so the skill can be discovered.
-
-## Usage
-
-Example prompt:
-
-```text
-Use $paper-to-learning-site to turn this paper into an interactive bilingual learning website.
-The default reader is a college student without domain expertise.
-Create a local static HTML version first; do not deploy yet.
-```
-
-The skill will usually ask:
-
-1. Are there topics or sections you want to emphasize?
-2. Do you want a local HTML site first, or should it be deployed to Vercel?
-3. Is the default reader level, a non-specialist college student, acceptable?
-
-If you ask it to proceed with defaults, it will explain hard concepts and experimental evidence thoroughly, then create a local static HTML site first.
-
-## Static Audit Script
-
-Run preflight before implementation:
-
-```bash
-python3 ~/.codex/skills/paper-to-learning-site/scripts/preflight_learning_site.py
-```
-
-Run:
-
-```bash
-python3 ~/.codex/skills/paper-to-learning-site/scripts/audit_learning_site.py <site-dir-or-index.html> --strict
-```
-
-The scripts check tool availability, missing local image assets, duplicate IDs, weak image alt text, PDF iframe patterns, buried raw source text, missing language modes, SVG-only generated diagrams, and missing coverage manifests. Strict mode also flags missing layout strategy, missing source-rendering modes, screenshot-only source prose, weak interaction inventories, public production copy such as `Generated`, `prompt`, `preflight`, or `manifest`, detached-only term chips, missing `data-source-id` anchors, repeated vague action labels, and generated visuals that lack language/source provenance.
-
-## Status
-
-Current release: `v0.1.2`.
-
-This is an early but usable version focused on the workflow and quality standards. Version `v0.1.2` strengthens layout strategy, original-text rendering, screenshot fallback rules, interaction inventories, and visual-reading quality gates. Future versions may add stronger templates, extraction utilities, sample sites, and richer validation.
+The default outputs are an interactive HTML deck, per-slide PNGs, and an optional PDF or Vercel deployment. Image 2 / `gpt-image-2` is preferred when available, but the workflow supports other configured image models and records the actual model used. A complete bilingual source reader remains available as an optional evidence layer.

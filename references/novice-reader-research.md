@@ -1,6 +1,6 @@
 # Novice Reader Research
 
-Use these user-centered constraints when designing a paper learning site. The target reader is not simply "low background"; they are trying to build reading strategies while also understanding the paper.
+Use these user-centered constraints when designing a paper learning deck or complete reader. The target reader is not simply "low background"; they are trying to build reading strategies while also understanding the paper.
 
 ## Observed Pain Points
 
@@ -15,7 +15,7 @@ Use these user-centered constraints when designing a paper learning site. The ta
 ## Design Responses
 
 - Start each chapter with a problem map: what question is this section answering, what evidence will appear, and what the reader should know after.
-- Keep the original text visible and annotated. Do not replace it with only summaries.
+- In deck mode, keep exact source quotations, figures, tables, formulas, page references, and evidence links visible at the points where claims are taught. In complete-reader mode, keep paragraph-level original text visible and annotated. Neither mode may replace the paper with unsupported summaries.
 - Attach definitions, examples, and "why this matters" to the exact sentence, term, figure, table cell, or equation where the reader needs them.
 - Encourage expert-like reading behaviors: summarize the current paragraph, inspect the data before accepting the conclusion, compare claim versus evidence, and note uncertainty.
 - Use "details on demand": keep the main line readable, but let readers open deeper definitions, examples, figure walkthroughs, and formula intuition in place.
@@ -25,15 +25,15 @@ Use these user-centered constraints when designing a paper learning site. The ta
 
 ## Skill Implications
 
-- The site is a reading scaffold first and a summary second.
-- The original text must remain visible, because annotations teach how to read the paper rather than replacing it.
+- The artifact is a learning scaffold first and a summary second.
+- Deck mode must retain source evidence and return-to-source paths; complete-reader mode must retain paragraph-level original text because annotations teach how to read the paper rather than replacing it.
 - Every major figure/table should be introduced before its conclusion, so the reader learns to inspect evidence.
 - Term explanations should appear at the point of confusion, not in a separate glossary route.
 - Generated diagrams should externalize hidden structure: actors, steps, data flow, training loop, comparison baseline, and uncertainty.
 
 ## Reader Modes To Support
 
-- **Guided first pass**: plain-language route through the problem, method, evidence, and conclusion.
+- **Guided visual deck**: question-led route through the problem, prerequisites, method, evidence, conclusion, and limitations.
 - **Close reading**: paragraph-level original/translation with inline terms and side notes.
 - **Evidence mode**: figures/tables next to claims, with how-to-read guidance.
 - **Review mode**: checkpoints, flashcard-like terms, and chapter summaries.

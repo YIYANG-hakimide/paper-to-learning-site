@@ -1,10 +1,10 @@
-# Design Quality Gate
+# Complete Reader Design Quality Gate
 
 ## Benchmark
 
-Use the Agentopia reader quality as a floor, not a template or ceiling. The first viewport should immediately feel like a designed learning product, not an internal generated note. For each paper, choose the visual system that best fits the topic, audience, and source artifacts; do not force the Agentopia pixel style when another editorial, notebook, report, manga, or product-reader style would teach better.
+Use the Agentopia reader quality as historical learning, not a template or ceiling. This file applies only to optional complete-reader mode. Choose the visual system that best fits the topic, audience, and source artifacts; do not force the Agentopia pixel style when another editorial, notebook, report, manga, or product-reader style would teach better.
 
-The target is not "pretty enough"; it is "clearer than a teaching PPT while preserving the original paper". A beautiful page that hides the source, shrinks evidence, or opens empty interactions fails.
+The target is not "pretty enough"; it is a complete guided reader that preserves paragraph-level source text while making concepts and evidence understandable. A beautiful page that hides the source, shrinks evidence, or opens empty interactions fails.
 
 The first viewport should usually include:
 

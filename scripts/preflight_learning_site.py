@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preflight checks for paper-to-learning-site runs."""
+"""Preflight checks for paper learning deck/site runs."""
 
 from __future__ import annotations
 
@@ -121,6 +121,19 @@ def status(ok: bool, detail: str | None = None) -> dict[str, object]:
     return {"ok": ok, "detail": detail or ""}
 
 
+def skill_status(name: str) -> dict[str, object]:
+    candidates = [
+        Path.home() / ".codex" / "skills" / name / "SKILL.md",
+        Path.home() / ".codex" / "skills" / ".system" / name / "SKILL.md",
+        Path.home() / ".agents" / "skills" / name / "SKILL.md",
+        Path.home() / ".claude" / "skills" / name / "SKILL.md",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return status(True, str(candidate.parent))
+    return status(False, "not installed in common skill directories")
+
+
 def validate_source(source: str | None) -> tuple[dict[str, object] | None, list[str]]:
     if not source:
         return None, []
@@ -134,6 +147,8 @@ def validate_source(source: str | None) -> tuple[dict[str, object] | None, list[
         "python_extract_ok": None,
         "page_count": None,
         "first_text_chars": 0,
+        "total_text_chars": 0,
+        "empty_or_near_empty_pages": [],
         "errors": [],
     }
     errors: list[str] = []
@@ -172,21 +187,25 @@ import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
-payload = {"ok": False, "page_count": None, "first_text_chars": 0, "error": ""}
+payload = {"ok": False, "page_count": None, "first_text_chars": 0, "total_text_chars": 0, "page_text_chars": [], "error": ""}
 try:
     try:
         from pypdf import PdfReader
         reader = PdfReader(str(path))
         payload["page_count"] = len(reader.pages)
-        first_text = reader.pages[0].extract_text() if reader.pages else ""
-        payload["first_text_chars"] = len((first_text or "").strip())
+        counts = [len(((page.extract_text() or "").strip())) for page in reader.pages]
+        payload["page_text_chars"] = counts
+        payload["first_text_chars"] = counts[0] if counts else 0
+        payload["total_text_chars"] = sum(counts)
         payload["ok"] = bool(reader.pages)
     except Exception:
         import pdfplumber
         with pdfplumber.open(path) as doc:
             payload["page_count"] = len(doc.pages)
-            first_text = doc.pages[0].extract_text() if doc.pages else ""
-            payload["first_text_chars"] = len((first_text or "").strip())
+            counts = [len(((page.extract_text() or "").strip())) for page in doc.pages]
+            payload["page_text_chars"] = counts
+            payload["first_text_chars"] = counts[0] if counts else 0
+            payload["total_text_chars"] = sum(counts)
             payload["ok"] = bool(doc.pages)
 except Exception as exc:
     payload["error"] = str(exc)
@@ -206,14 +225,21 @@ print(json.dumps(payload, ensure_ascii=False))
             report["python_extract_ok"] = bool(payload.get("ok"))
             report["page_count"] = report["page_count"] or payload.get("page_count")
             report["first_text_chars"] = payload.get("first_text_chars") or 0
+            report["total_text_chars"] = payload.get("total_text_chars") or 0
+            counts = payload.get("page_text_chars") or []
+            report["empty_or_near_empty_pages"] = [index + 1 for index, count in enumerate(counts) if count < 40]
             if not payload.get("ok"):
                 errors.append(f"Python could not extract source PDF: {payload.get('error') or 'no readable pages'}")
+            elif counts:
+                empty_ratio = len(report["empty_or_near_empty_pages"]) / len(counts)
+                if empty_ratio > 0.15:
+                    errors.append(f"Too many PDF pages have little or no extractable text: {len(report['empty_or_near_empty_pages'])}/{len(counts)} pages. OCR or repair the source before building.")
         else:
             report["python_extract_ok"] = False
             errors.append(f"Python could not extract source PDF: {(result.stderr or result.stdout).strip()[:240]}")
 
     if report.get("python_extract_ok") is not True:
-        errors.append("Source PDF is not readable enough to build an in-page learning reader. Re-download or repair the PDF before extraction.")
+        errors.append("Source PDF is not readable enough to build a trustworthy learning deck or reader. Re-download or repair the PDF before extraction.")
     report["errors"] = errors
     return report, errors
 
@@ -245,6 +271,9 @@ def main() -> int:
         "node_playwright": status(node_can_import("playwright")),
         "playwright_browser": playwright_browser_status(),
         "chrome_headless": status(bool(chrome_path()), chrome_path()),
+        "frontend_slides_skill": skill_status("frontend-slides"),
+        "guizang_material_skill": skill_status("guizang-material-illustration"),
+        "imagegen_skill": skill_status("imagegen"),
     }
 
     routes = {
@@ -252,6 +281,9 @@ def main() -> int:
         "pdf_figures": checks["pdftoppm"]["ok"] or checks["python_pillow"]["ok"],
         "image_processing": checks["python_pillow"]["ok"] or checks["sips"]["ok"] or checks["imagemagick"]["ok"],
         "image_generation": "manual_check_required",
+        "visual_deck_layout": checks["frontend_slides_skill"]["ok"] or "built-in fixed-stage fallback",
+        "illustration_prompting": checks["guizang_material_skill"]["ok"] or "built-in paper-specific prompting",
+        "deck_export": checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"],
         "browser_qa": checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"],
         "github_publish": checks["git"]["ok"] and checks["gh"]["ok"],
         "vercel_deploy": checks["vercel"]["ok"],
@@ -280,7 +312,7 @@ def main() -> int:
         },
         "manual_checks": {
             "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams.",
-            "image_asset_export": "After the first generated preview, verify that a PNG/JPG/WebP can be saved or copied into the site assets/diagrams directory. A chat-only preview is not a deliverable website asset."
+        "image_asset_export": "After the first generated preview, verify that a PNG/JPG/WebP can be saved or copied into the deck assets/visuals directory. A chat-only preview is not a deliverable deck asset."
         },
         "blockers": blockers,
     }
