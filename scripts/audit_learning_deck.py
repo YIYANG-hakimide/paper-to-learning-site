@@ -31,7 +31,41 @@ FORBIDDEN_PUBLIC_TEXT = (
     "preflight",
     "manifest",
     "regression",
+    "本页旨在",
+    "这里需要让用户",
+    "这里需要告诉读者",
+    "测试页",
+    "回归样本",
 )
+GENERIC_AI_COPY_PATTERNS = (
+    (r"值得注意的是|不难发现|接下来(?:我们)?(?:将)?深入|由此可见", "generic transition"),
+    (r"赋能|颠覆|全新范式|革命性|重塑", "inflated generic wording"),
+)
+
+
+def public_copy_issues(text: str) -> list[str]:
+    issues = [label for pattern, label in GENERIC_AI_COPY_PATTERNS if re.search(pattern, text, re.I)]
+    if any(token.lower() in text.lower() for token in FORBIDDEN_PUBLIC_TEXT):
+        issues.append("internal production wording")
+    if len(re.findall(r"不是[^。！？\n]{0,36}而是", text)) > 1:
+        issues.append("repeated not-but contrast syntax")
+    if len(re.findall(r"不仅[^。！？\n]{0,36}(?:更|还)", text)) > 1:
+        issues.append("repeated not-only contrast syntax")
+    if len(re.findall(r"从[^。！？\n]{1,24}到[^。！？\n]{1,24}", text)) > 3:
+        issues.append("repeated from-to framing")
+    return issues
+
+
+def chinese_ratio(text: str) -> float:
+    chinese = len(re.findall(r"[\u3400-\u9fff]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    return chinese / max(1, chinese + latin)
+
+
+def html_visible_text(html: str) -> str:
+    text = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", html, flags=re.I | re.S)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def locate(input_path: Path) -> tuple[Path, Path]:
@@ -81,6 +115,20 @@ def has_review_lenses(passes: list[dict]) -> bool:
     )
 
 
+def has_full_review_lenses(passes: list[dict]) -> bool:
+    lens_text = " ".join(str(item.get("lens", "")).lower() for item in passes if isinstance(item, dict))
+    groups = (
+        ("visual", "design", "美观", "视觉"),
+        ("information", "completeness", "信息", "完整"),
+        ("narrative", "teaching", "logic", "叙事", "教学", "逻辑"),
+        ("novice", "comprehension", "新手", "理解"),
+        ("factual", "evidence", "accuracy", "事实", "证据", "准确"),
+        ("copy", "ai tone", "public", "文案", "ai味", "公开"),
+        ("technical", "render", "pdf", "技术", "渲染"),
+    )
+    return all(any(token in lens_text for token in group) for group in groups)
+
+
 def run_actual_ocr(paths: list[Path]) -> tuple[dict[str, dict] | None, str | None]:
     if not paths:
         return {}, None
@@ -115,7 +163,12 @@ def run_actual_ocr(paths: list[Path]) -> tuple[dict[str, dict] | None, str | Non
 
 def command_path(name: str) -> str | None:
     dependency_root = Path.home() / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies"
-    for candidate in (dependency_root / "bin" / "override" / name, dependency_root / "bin" / name):
+    for candidate in (
+        dependency_root / "bin" / "override" / name,
+        dependency_root / "bin" / name,
+        dependency_root / "native" / "poppler" / "bin" / name,
+        dependency_root / "native" / "poppler" / "poppler" / "bin" / name,
+    ):
         if candidate.exists():
             return str(candidate)
     return shutil.which(name)
@@ -210,6 +263,22 @@ def validate_pdf(
     return issues
 
 
+def extract_pdf_text(pdf_path: Path) -> tuple[str, str | None]:
+    pdftotext = command_path("pdftotext")
+    if not pdftotext:
+        return "", "pdftotext is unavailable; final PDF public copy cannot be extracted."
+    result = subprocess.run(
+        [pdftotext, "-layout", str(pdf_path), "-"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        return "", f"pdftotext could not extract final PDF: {(result.stderr or result.stdout).strip()[:240]}"
+    return result.stdout, None
+
+
 def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: str, errors: list[str]) -> int:
     meta = manifest.get("teaching_fidelity", {})
     rel = meta.get("inventory_path")
@@ -238,10 +307,13 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: st
         errors.append("Teaching inventory says the paper has experiments but experiments[] is empty.")
     final_items = {str(item.get("id")): item for item in manifest.get("slides", []) if item.get("id")}
     for concept in inventory.get("hard_concepts", []):
-        for field in ("term", "plain_label", "field_definition", "plain_explanation", "paper_specific_meaning", "common_misunderstanding", "definition_item_ids"):
+        for field in ("term", "plain_label", "field_definition", "plain_explanation", "paper_specific_meaning", "author_usage", "common_misunderstanding", "definition_item_ids", "visible_dom_ids"):
             if not concept.get(field):
                 errors.append(f"Hard concept {concept.get('id', '[unknown]')} is missing {field}.")
         concept_id = str(concept.get("id", ""))
+        for dom_id in concept.get("visible_dom_ids", []) or []:
+            if not re.search(rf'id=["\']{re.escape(str(dom_id))}["\']', html):
+                errors.append(f"Hard concept {concept_id} explanation is not visible in HTML: {dom_id}")
         for item_id in concept.get("definition_item_ids", []):
             item = final_items.get(str(item_id))
             if not item:
@@ -314,12 +386,58 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: st
                 continue
             status = item.get("status")
             level = entry.get("required_level", "core")
-            omission_allowed = level == "secondary" or (level == "major" and size_mode == "concise")
+            mode_requirement = (entry.get("mode_requirement") or {}).get("presentation-pdf")
+            if mode_requirement not in {"must-cover", "optional", "not-applicable"}:
+                errors.append(f"Teaching inventory item has invalid presentation-pdf mode_requirement: {inventory_key}:{item_id}")
+            omission_allowed = mode_requirement != "must-cover" or level == "secondary" or (level == "major" and size_mode == "concise")
             if status == "omitted":
                 if not omission_allowed or not item.get("reason"):
                     errors.append(f"Required teaching item was omitted without an allowed reason: {inventory_key}:{item_id}")
             elif status != "covered" or not item.get("final_item_ids"):
                 errors.append(f"Teaching coverage must be covered with final_item_ids: {inventory_key}:{item_id}")
+    figure_explanations = manifest.get("major_figure_explanations", [])
+    explanations_by_id = {
+        str(item.get("figure_id")): item
+        for item in figure_explanations
+        if isinstance(item, dict) and item.get("figure_id")
+    }
+    covered_figure_ids = {
+        str(item.get("inventory_id"))
+        for item in manifest.get("major_figure_coverage", [])
+        if item.get("status") == "covered" and item.get("inventory_id")
+    }
+    coverage_by_figure = {
+        str(item.get("inventory_id")): {str(value) for value in item.get("final_item_ids", [])}
+        for item in manifest.get("major_figure_coverage", [])
+        if item.get("inventory_id")
+    }
+    valid_slide_ids = {str(item.get("id")) for item in manifest.get("slides", []) if item.get("id")}
+    for figure_id in covered_figure_ids:
+        explanation = explanations_by_id.get(figure_id)
+        if not explanation:
+            errors.append(f"Covered major figure lacks a reading explanation: {figure_id}")
+            continue
+        for field in (
+            "final_slide_ids",
+            "what_it_is",
+            "how_to_read",
+            "baseline_metric",
+            "highlighted_region",
+            "supported_conclusion",
+            "limitation_or_not_applicable",
+            "source_page",
+            "visible_dom_ids",
+        ):
+            if explanation.get(field) in (None, "", []):
+                errors.append(f"Major figure explanation {figure_id} is missing {field}.")
+        for dom_id in explanation.get("visible_dom_ids", []):
+            if not re.search(rf'id=["\']{re.escape(str(dom_id))}["\']', html):
+                errors.append(f"Major figure explanation {figure_id} is not visible in HTML: {dom_id}")
+        explanation_slide_ids = {str(value) for value in explanation.get("final_slide_ids", [])}
+        if not explanation_slide_ids.issubset(valid_slide_ids):
+            errors.append(f"Major figure explanation {figure_id} references missing slides.")
+        if explanation_slide_ids != coverage_by_figure.get(figure_id, set()):
+            errors.append(f"Major figure explanation {figure_id} slide ids disagree with major_figure_coverage.")
     central_claim_ids = {str(item.get("id")) for item in inventory.get("central_claims", []) if item.get("id")}
     bundles = manifest.get("evidence_bundles", [])
     bundle_claim_ids = {str(item.get("claim_id")) for item in bundles if isinstance(item, dict) and item.get("claim_id")}
@@ -341,7 +459,7 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: st
     )
 
 
-def browser_probe(html_path: Path, output_dir: Path) -> tuple[dict | None, str | None]:
+def browser_probe(html_path: Path, output_dir: Path, expected_ids_by_slide: dict[str, list[str]]) -> tuple[dict | None, str | None]:
     dependency_root = Path.home() / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies"
     node = dependency_root / "node" / "bin" / "node"
     if not node.exists():
@@ -364,6 +482,7 @@ const { pathToFileURL } = require('url');
 (async () => {
   const htmlPath = process.argv[1];
   const outputDir = process.argv[2];
+  const expectedIdsBySlide = JSON.parse(process.argv[3] || '{}');
   const executablePath = process.env.PLAYWRIGHT_CHROME_EXECUTABLE || undefined;
   const browser = await chromium.launch({ headless: true, executablePath, args: ['--no-first-run'] });
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
@@ -391,7 +510,8 @@ const { pathToFileURL } = require('url');
       document.body.style.margin = '0';
     }, index);
     await page.waitForTimeout(30);
-    const metrics = await page.locator('.slide, [data-slide]').nth(index).evaluate((slide) => {
+    const expectedVisibleIds = expectedIdsBySlide[String(index + 1)] || [];
+    const metrics = await page.locator('.slide, [data-slide]').nth(index).evaluate((slide, expectedVisibleIds) => {
       const brokenImages = [...slide.querySelectorAll('img')].filter(img => !img.complete || img.naturalWidth === 0).length;
       const images = [...slide.querySelectorAll('img')].map(img => {
         const box = img.getBoundingClientRect();
@@ -448,6 +568,17 @@ const { pathToFileURL } = require('url');
         .filter((value, index, values) => value !== '0,0,0,0' && values.indexOf(value) === index)
         .sort()
         .join('|');
+      const expectedVisibleFields = Object.fromEntries(expectedVisibleIds.map(id => {
+        const el = document.getElementById(id);
+        if (!el || !slide.contains(el)) return [id, { present: false, visible: false, text: '' }];
+        const style = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        return [id, {
+          present: true,
+          visible: style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0,
+          text: (el.innerText || el.textContent || '').trim()
+        }];
+      }));
       return {
         scrollWidth: slide.scrollWidth,
         scrollHeight: slide.scrollHeight,
@@ -456,6 +587,7 @@ const { pathToFileURL } = require('url');
         brokenImages,
         images,
         generatedVisuals,
+        visibleText: slide.innerText || '',
         textChars: (slide.innerText || '').replace(/\s+/g, '').length,
         projectedMinBodyPx: projectedFonts.length ? Math.min(...projectedFonts) : null,
         nestedCards,
@@ -470,9 +602,10 @@ const { pathToFileURL } = require('url');
           .filter(el => { const style = getComputedStyle(el); const box = el.getBoundingClientRect(); return style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0; })
           .map(el => el.getAttribute('data-claim-id')),
         sourceEvidence,
-        layoutFingerprint
+        layoutFingerprint,
+        expectedVisibleFields
       };
-    });
+    }, expectedVisibleIds);
     const screenshot = path.join(outputDir, `slide-${String(index + 1).padStart(2, '0')}.png`);
     await page.screenshot({ path: screenshot, fullPage: false });
     results.push({ index: index + 1, screenshot, ...metrics });
@@ -483,7 +616,7 @@ const { pathToFileURL } = require('url');
 """
     try:
         result = subprocess.run(
-            [str(node), "-e", code, str(html_path), str(output_dir)],
+            [str(node), "-e", code, str(html_path), str(output_dir), json.dumps(expected_ids_by_slide, ensure_ascii=False)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -535,6 +668,9 @@ def main() -> int:
     for token in FORBIDDEN_PUBLIC_TEXT:
         if token.lower() in html.lower():
             errors.append(f"Public HTML contains production wording: {token}")
+    visible_copy = html_visible_text(html)
+    for issue in public_copy_issues(visible_copy):
+        errors.append(f"Public deck copy has AI/template residue: {issue}")
     if any(token in html for token in ("□", "�")):
         errors.append("Public deck HTML contains missing/replacement glyphs.")
 
@@ -562,13 +698,17 @@ def main() -> int:
     elif manifest.get("_invalid"):
         errors.append("Invalid learning-deck-manifest.json")
     else:
-        if str(manifest.get("manifest_schema_version")) != "0.4":
-            errors.append("Deck manifest schema version must be 0.4.")
+        if str(manifest.get("manifest_schema_version")) != "0.5":
+            errors.append("Deck manifest schema version must be 0.5.")
         if manifest.get("output_mode") != "presentation-pdf":
             errors.append("Deck manifest output_mode must be presentation-pdf.")
+        if manifest.get("presentation_intent") != "reading-first":
+            errors.append("Deck presentation_intent must be reading-first.")
         reader_language = str(manifest.get("reader_language", ""))
         if not reader_language:
             errors.append("Deck manifest must record reader_language.")
+        elif reader_language.lower().startswith("zh") and chinese_ratio(visible_copy) < 0.45:
+            errors.append("Chinese-reader deck is not Chinese-dominant enough in visible copy.")
         size_mode = manifest.get("size_mode")
         if size_mode not in {"concise", "medium", "detailed"}:
             errors.append("Deck manifest must record resolved size_mode.")
@@ -650,14 +790,19 @@ def main() -> int:
         for field in ("main_question", "thesis", "argument_steps", "evidence_route", "conclusion", "limitation"):
             if not argument_map.get(field):
                 errors.append(f"Storyboard paper_argument_map is missing {field}.")
-        if len(argument_map.get("argument_steps", [])) < 3:
+        argument_steps = argument_map.get("argument_steps") or []
+        evidence_route = argument_map.get("evidence_route") or []
+        if not isinstance(argument_steps, list) or not isinstance(evidence_route, list):
+            errors.append("Storyboard paper_argument_map argument_steps/evidence_route must be lists.")
+            argument_steps, evidence_route = [], []
+        if len(argument_steps) < 3:
             errors.append("Storyboard paper_argument_map needs at least three ordered argument steps.")
-        if len(argument_map.get("evidence_route", [])) < 2:
+        if len(evidence_route) < 2:
             errors.append("Storyboard paper_argument_map needs an explicit evidence route.")
 
         opening_roles = [str(item.get("sequence_role", "")) for item in slide_items[:3]]
-        if not any(role in {"paper-overview", "overview-and-argument-map"} for role in opening_roles[:2]):
-            errors.append("A paper overview must appear by slide 2.")
+        if not any(role in {"paper-overview", "overview-and-argument-map"} for role in opening_roles):
+            errors.append("A paper overview must appear within the opening three slides.")
         if not any(role in {"argument-map", "overview-and-argument-map"} for role in opening_roles):
             errors.append("An argument map must appear by slide 3.")
         all_sequence_roles = [str(item.get("sequence_role", "")) for item in slide_items]
@@ -749,8 +894,8 @@ def main() -> int:
                 required_groups = 3 if role in {"paper-overview", "argument-map", "overview-and-argument-map", "experiment-setup", "evidence", "recap"} else 2
                 if len(groups) < required_groups:
                     errors.append(f"Presentation slide {slide.get('id')} has too few information groups for {role}: {len(groups)}/{required_groups}.")
-                if len(groups) > 4 or len({json.dumps(group, sort_keys=True, ensure_ascii=False) for group in groups}) != len(groups):
-                    errors.append(f"Presentation slide {slide.get('id')} information_groups must contain 2-4 distinct groups.")
+                if len(groups) > 6 or len({json.dumps(group, sort_keys=True, ensure_ascii=False) for group in groups}) != len(groups):
+                    errors.append(f"Reading-first slide {slide.get('id')} information_groups must contain 2-6 distinct groups.")
                 if len(slide.get("scan_order", [])) < 3:
                     errors.append(f"Presentation slide {slide.get('id')} needs a scan_order with at least three steps.")
                 if len(set(map(str, slide.get("scan_order", [])))) != len(slide.get("scan_order", [])):
@@ -804,9 +949,28 @@ def main() -> int:
                             errors.append(f"Worked-example slide {slide.get('id')} is missing {field}.")
                     if isinstance(method_stage_count, int) and len(example.get("stages", [])) < method_stage_count:
                         errors.append(f"Worked-example slide {slide.get('id')} does not cover the full method pipeline.")
-            for field in ("presentation_beat", "spoken_takeaway", "density_class", "reveal_order", "estimated_seconds"):
+            for field in ("presentation_intent", "communication_job", "reasoning_role", "standalone_takeaway", "reader_context", "so_what", "density_class", "scan_order"):
                 if slide.get("type") not in {"title", "evidence-appendix"} and slide.get(field) in (None, "", []):
-                    errors.append(f"Presentation slide {slide.get('id')} is missing {field}.")
+                    errors.append(f"Reading-first slide {slide.get('id')} is missing {field}.")
+            if slide.get("type") not in {"title", "evidence-appendix"} and slide.get("presentation_intent") != "reading-first":
+                errors.append(f"Slide {slide.get('id')} presentation_intent must be reading-first.")
+            if slide.get("type") not in {"title", "evidence-appendix"}:
+                if slide.get("reasoning_role") not in {"question", "definition", "mechanism", "example", "evidence", "comparison", "conclusion", "boundary", "synthesis"}:
+                    errors.append(f"Slide {slide.get('id')} has invalid reasoning_role.")
+                if slide.get("density_class") not in {"low", "medium", "evidence-dense"}:
+                    errors.append(f"Slide {slide.get('id')} has invalid density_class.")
+                visible_fields = (
+                    ("communication_job", "communication_job_dom_id"),
+                    ("standalone_takeaway", "standalone_takeaway_dom_id"),
+                    ("reader_context", "reader_context_dom_id"),
+                    ("so_what", "so_what_dom_id"),
+                )
+                for value_field, dom_field in visible_fields:
+                    dom_id = str(slide.get(dom_field, ""))
+                    if not dom_id:
+                        errors.append(f"Slide {slide.get('id')} is missing {dom_field}.")
+                    elif not re.search(rf'id=["\']{re.escape(dom_id)}["\']', html):
+                        errors.append(f"Slide {slide.get('id')} {value_field} is not visible in HTML: {dom_id}")
             if slide.get("type") not in {"title", "evidence-appendix"} and "section_reset" not in slide:
                 errors.append(f"Presentation slide {slide.get('id')} is missing section_reset.")
             density = slide.get("density_class")
@@ -823,8 +987,6 @@ def main() -> int:
                     low_density_teaching_count += 1
             if slide.get("section_reset") is True:
                 section_reset_count += 1
-            if slide.get("estimated_seconds") not in (None, "") and (not isinstance(slide.get("estimated_seconds"), (int, float)) or slide.get("estimated_seconds") <= 0):
-                errors.append(f"Presentation slide {slide.get('id')} has invalid estimated_seconds.")
             if slide.get("type") not in {"title", "divider", "recap", "evidence-appendix"}:
                 content_slide_count += 1
                 family = str(slide.get("layout_family", ""))
@@ -852,8 +1014,8 @@ def main() -> int:
         if max_evidence_dense_streak > 3:
             errors.append("Presentation contains more than three consecutive evidence-dense pages without a reset.")
         teaching_page_count = len([slide for slide in slide_items if slide.get("type") not in {"title", "divider", "evidence-appendix"}])
-        if teaching_page_count and low_density_teaching_count / teaching_page_count > 0.25:
-            errors.append(f"Low-density slides exceed one quarter of teaching pages: {low_density_teaching_count}/{teaching_page_count}.")
+        if teaching_page_count and low_density_teaching_count / teaching_page_count > 0.15:
+            errors.append(f"Low-density slides exceed the reading-first allowance: {low_density_teaching_count}/{teaching_page_count}.")
         if size_mode in {"medium", "detailed"} and section_reset_count < 2:
             errors.append("Medium/detailed presentation needs at least two visible section resets.")
 
@@ -963,6 +1125,14 @@ def main() -> int:
                 errors.append(f"Strict OCR failed for generated visual {rel}: {actual_record.get('error')}")
             if actual_text and any(token in actual_text for token in ("□", "�")):
                 errors.append(f"Strict OCR detected missing/replacement glyphs in generated visual: {rel}")
+            copy_text = actual_text or ocr_text
+            if reader_language.lower().startswith("zh") and copy_text and chinese_ratio(copy_text) < 0.35:
+                errors.append(f"Chinese-reader generated visual is not Chinese-dominant enough: {rel}")
+            for issue in public_copy_issues(copy_text):
+                errors.append(f"Generated visual public copy has AI/template residue ({issue}): {rel}")
+            for token in FORBIDDEN_PUBLIC_TEXT:
+                if token.lower() in copy_text.lower():
+                    errors.append(f"Generated visual contains production wording '{token}': {rel}")
             actual_missing_labels = [str(label) for label in expected_labels if str(label) and str(label) not in actual_text]
             if args.strict and actual_missing_labels:
                 errors.append(f"Strict OCR could not find expected labels {actual_missing_labels[:5]} in generated visual: {rel}")
@@ -1058,7 +1228,7 @@ def main() -> int:
                 except Exception:
                     errors.append(f"Source inventory is invalid JSON: {inventory_rel}")
 
-        argument_records = [*argument_map.get("argument_steps", []), *argument_map.get("evidence_route", [])]
+        argument_records = [*argument_steps, *evidence_route]
         argument_record_ids: set[str] = set()
         for record in argument_records:
             if not isinstance(record, dict):
@@ -1158,7 +1328,12 @@ def main() -> int:
             "evidence_style",
             "forbidden_styles",
             "layout_families",
-            "preview_choice_reason",
+            "style_selection_basis",
+            "color_roles",
+            "typography_roles",
+            "grid_system",
+            "title_system",
+            "forbidden_layouts",
         ):
             if not style.get(field):
                 errors.append(f"Design brief is missing {field}.")
@@ -1170,12 +1345,16 @@ def main() -> int:
             "small_viewport_checked",
             "visual_inspection_complete",
             "full_deck_contact_sheet_checked",
-            "presentation_read_aloud_checked",
-            "presentation_rhythm_checked",
-            "projected_legibility_checked",
+            "independent_reading_checked",
+            "reading_rhythm_checked",
+            "laptop_pdf_legibility_checked",
             "overview_sequence_checked",
             "in_image_explanation_checked",
             "information_density_checked",
+            "consulting_report_density_checked",
+            "anti_ai_public_copy_checked",
+            "key_figure_explanations_checked",
+            "title_story_checked",
             "glyph_integrity_checked",
             "template_residue_checked",
             "source_crop_readability_checked",
@@ -1185,8 +1364,9 @@ def main() -> int:
         if qa.get("orphan_generated_visuals") != 0:
             errors.append("Deck QA reports orphan generated visuals.")
         adversarial_passes = qa.get("adversarial_passes", [])
-        if len(adversarial_passes) < 3 or not has_review_lenses(adversarial_passes):
-            errors.append("Deck QA must record visual, information-completeness, and narrative/novice review passes.")
+        review_rounds = {str(item.get("round")) for item in adversarial_passes if isinstance(item, dict) and item.get("round") is not None}
+        if len(review_rounds) < 2 or not has_full_review_lenses(adversarial_passes):
+            errors.append("Deck QA must record at least two rounds covering visual, information, teaching logic, novice comprehension, factual accuracy, public copy, and technical rendering.")
         contact_sheet_rel = qa.get("contact_sheet_path")
         if not contact_sheet_rel or not (root / str(contact_sheet_rel)).exists():
             errors.append("Deck QA does not provide a real full-deck contact sheet.")
@@ -1266,6 +1446,18 @@ def main() -> int:
                 declared_pdf_hash = normalized_hash(exports.get("pdf_sha256"))
                 if pdf_path.exists() and (not declared_pdf_hash or declared_pdf_hash != sha256(pdf_path)):
                     errors.append("Final PDF hash is missing or does not match the exported file.")
+                if pdf_path.exists():
+                    pdf_text, pdf_text_error = extract_pdf_text(pdf_path)
+                    if pdf_text_error:
+                        errors.append(pdf_text_error)
+                    else:
+                        if reader_language.lower().startswith("zh") and chinese_ratio(pdf_text) < 0.35:
+                            errors.append("Final PDF extracted text is not Chinese-dominant enough.")
+                        for issue in public_copy_issues(pdf_text):
+                            errors.append(f"Final PDF public copy has AI/template residue: {issue}")
+                        for token in FORBIDDEN_PUBLIC_TEXT:
+                            if token.lower() in pdf_text.lower():
+                                errors.append(f"Final PDF contains production wording: {token}")
 
     if len(local_bitmap_refs) < 4:
         warnings.append(f"Only {len(local_bitmap_refs)} local bitmap images are embedded; visual-first coverage may be weak.")
@@ -1288,7 +1480,20 @@ def main() -> int:
     if args.skip_browser:
         warnings.append("Browser rendering was skipped; slide screenshots and runtime geometry were not verified.")
     elif html_path.exists():
-        probe, probe_error = browser_probe(html_path, root / "qa" / "screenshots")
+        expected_ids_by_slide = {
+            str(index): [
+                str(slide.get(field))
+                for field in (
+                    "communication_job_dom_id",
+                    "standalone_takeaway_dom_id",
+                    "reader_context_dom_id",
+                    "so_what_dom_id",
+                )
+                if slide.get(field)
+            ]
+            for index, slide in enumerate(slide_items, 1)
+        }
+        probe, probe_error = browser_probe(html_path, root / "qa" / "screenshots", expected_ids_by_slide)
         if probe_error:
             errors.append(probe_error)
         elif probe:
@@ -1318,8 +1523,18 @@ def main() -> int:
                 generated = result.get("generatedVisuals", [])
                 if generated and max(item.get("areaRatio", 0) for item in generated) < 0.20:
                     errors.append(f"Slide {index} generated teaching visual occupies less than 20% of the page.")
-                if result.get("textChars", 0) > 900:
-                    errors.append(f"Slide {index} is too text-dense for presentation mode: {result.get('textChars')} visible characters.")
+                if result.get("textChars", 0) > 1600:
+                    errors.append(f"Slide {index} is too text-dense even for reading-first mode: {result.get('textChars')} visible characters.")
+                visible_slide_text = str(result.get("visibleText", ""))
+                if reader_language.lower().startswith("zh") and visible_slide_text and chinese_ratio(visible_slide_text) < 0.35:
+                    errors.append(f"Slide {index} browser-visible copy is not Chinese-dominant enough.")
+                for issue in public_copy_issues(visible_slide_text):
+                    errors.append(f"Slide {index} browser-visible copy has AI/template residue: {issue}")
+                for dom_id, field_state in result.get("expectedVisibleFields", {}).items():
+                    if not field_state.get("present") or not field_state.get("visible"):
+                        errors.append(f"Slide {index} reading-first field is not browser-visible: {dom_id}")
+                    elif len(str(field_state.get("text", "")).strip()) < 8:
+                        errors.append(f"Slide {index} reading-first field is too empty to teach: {dom_id}")
                 if result.get("projectedMinBodyPx") is not None and result.get("projectedMinBodyPx") < 12:
                     errors.append(f"Slide {index} body text becomes too small at 1366x768 projection: {result.get('projectedMinBodyPx'):.1f}px.")
                 if result.get("nestedCards", 0) > 0:
@@ -1333,9 +1548,9 @@ def main() -> int:
                 if slide_type not in {"title", "divider", "evidence-appendix"}:
                     if result.get("informationGroupCount", 0) < 2:
                         errors.append(f"Slide {index} does not expose at least two visible data-information-group teaching groups.")
-                    if result.get("teachingObjectCount", 0) == 0 and result.get("textChars", 0) < 260:
-                        errors.append(f"Slide {index} has neither a substantial teaching object nor enough explanation.")
-                    if density_class != "low" and result.get("textChars", 0) < 220 and result.get("teachingObjectAreaRatio", 0) < 0.22:
+                    if result.get("teachingObjectCount", 0) == 0:
+                        errors.append(f"Slide {index} has no substantial teaching object; long prose alone does not satisfy reading-first mode.")
+                    if density_class != "low" and result.get("textChars", 0) < 260 and result.get("teachingObjectAreaRatio", 0) < 0.22:
                         errors.append(
                             f"Slide {index} is under-taught: only {result.get('textChars', 0)} visible characters and "
                             f"{result.get('teachingObjectAreaRatio', 0):.2f} teaching-object area ratio."

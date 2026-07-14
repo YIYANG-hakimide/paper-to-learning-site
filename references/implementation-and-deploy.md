@@ -9,7 +9,6 @@ Do not automatically generate all formats.
 ```text
 learn-paper-images/
   assets/images/           # numbered final images only
-  assets/evidence/         # source crops used in compositions
   assets/exports/
     learn-paper-album.pdf  # one final image per page, same order
   data/source-inventory.json
@@ -67,13 +66,14 @@ Manifest counts must match real artifacts. Store source inventory path/hash, sto
 
 Always pass the original source path to the final audit. The audit must compare the requested file hash and PDF page count with `source_fidelity.source_pdf_sha256` and `source_fidelity.page_count`. A package built from another paper is a P0 failure even when its internal manifest is self-consistent.
 
-Use `manifest_schema_version: "0.4"` for image-series and presentation manifests. Keep HTML manifests at `0.3` until their reader contract changes.
+Use `manifest_schema_version: "0.5"` for image-series and presentation manifests. Use `0.4` for HTML after adding the shared learning path and argument map.
 
-## Image-Series Composition
+## Image-Series Native Generation
 
-- Use the selected aspect ratio, normally 3:4 portrait.
-- Compose exact Chinese copy, citations, values, equations, and labels deterministically when model-generated text is unreliable.
-- Plan labels and callout zones before generation; compose deterministic text at the final bitmap resolution so it remains sharp and visually integrated.
+- Choose the aspect ratio from the teaching structure; portrait is common but not mandatory.
+- Generate each complete final page in one image-model call with its title, Chinese explanation, labels, relationships, and visual hierarchy already integrated.
+- Do not compose exact copy, citations, source figures, labels, or slide chrome after generation. Regenerate the full image when model text is unreliable.
+- Save the raw model output and copy it unchanged into `assets/images/`; hashes must match.
 - Preserve a shared design system across the sequence while varying visual form.
 - Create a contact sheet after each batch and one final contact sheet.
 - Export the album PDF and run `audit_visual_series.py <output-dir> --source <paper.pdf> --strict --require-pdf` before delivery.
@@ -84,7 +84,7 @@ Use `manifest_schema_version: "0.4"` for image-series and presentation manifests
 - Author every page at 1920x1080.
 - Scale uniformly; do not responsive-reflow page contents.
 - Use the internal HTML stage to ensure exact typography, citations, formulas, charts, and image placement.
-- Use large focal visuals and presentation pacing rather than image-series density.
+- Use self-reading consulting-report density rather than speaker-deck pacing.
 - Export pages with Playwright or another reliable browser renderer.
 - Run `audit_learning_deck.py <work-dir> --source <paper.pdf> --strict`, export PDF, then rerun with `--source <paper.pdf> --strict --require-pdf`.
 - Inspect title, image-led, evidence-led, densest, and closing pages in the final PDF.
@@ -97,9 +97,10 @@ Use `manifest_schema_version: "0.4"` for image-series and presentation manifests
 - Keep figures/tables beside their claims and provide how-to-read guidance.
 - Ensure drawers, notes, bubbles, and panels open and close without covering the reading context.
 - Test chapter, language, term, figure, evidence-return, and recap states on desktop and mobile.
+- Include an opening paper overview and argument route whose nodes link to the corresponding source blocks and evidence.
 - Run `audit_learning_site.py --strict` before local delivery or deployment.
 
-## Source Evidence
+## Source Evidence For PPT And HTML
 
 - Crop figures/tables tightly; split composite panels when necessary.
 - Preserve exact formulas, numerical values, axes, units, legends, quotations, and page references.

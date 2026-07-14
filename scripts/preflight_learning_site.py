@@ -20,9 +20,18 @@ def dependency_root() -> Path:
 
 def command_path(*names: str) -> str | None:
     dep_bin = dependency_root() / "bin"
+    dep_override_bin = dep_bin / "override"
     dep_node_bin = dependency_root() / "node" / "bin"
+    dep_poppler_bin = dependency_root() / "native" / "poppler" / "bin"
+    dep_nested_poppler_bin = dependency_root() / "native" / "poppler" / "poppler" / "bin"
     for name in names:
-        for folder in (dep_bin, dep_node_bin):
+        for folder in (
+            dep_override_bin,
+            dep_bin,
+            dep_node_bin,
+            dep_poppler_bin,
+            dep_nested_poppler_bin,
+        ):
             candidate = folder / name
             if candidate.exists():
                 return str(candidate)
@@ -251,6 +260,7 @@ def main() -> int:
     parser.add_argument("--source", help="Optional PDF/article path to validate before extraction")
     parser.add_argument("--mode", choices=("image-series", "presentation-pdf", "interactive-html"), default="interactive-html")
     parser.add_argument("--deploy", action="store_true", help="Check deployment tooling when HTML deployment is requested")
+    parser.add_argument("--confirm-image-direct-output", action="store_true", help="Confirm the current image route can save untouched full-page model outputs and receipts")
     args = parser.parse_args()
 
     pdfplumber_ok, pdfplumber_python = python_module("pdfplumber")
@@ -296,8 +306,8 @@ def main() -> int:
         "image_generation": "manual_check_required",
         "visual_deck_layout": checks["frontend_slides_skill"]["ok"] or "built-in fixed-stage fallback",
         "illustration_prompting": checks["guizang_material_skill"]["ok"] or "built-in paper-specific prompting",
-        "deck_export": (checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"]) if args.mode == "presentation-pdf" else "not-required",
-        "browser_qa": (checks["playwright_browser"]["ok"] or checks["chrome_headless"]["ok"]) if browser_required else "not-required",
+        "deck_export": checks["playwright_browser"]["ok"] if args.mode == "presentation-pdf" else "not-required",
+        "browser_qa": checks["playwright_browser"]["ok"] if browser_required else "not-required",
         "github_publish": checks["git"]["ok"] and checks["gh"]["ok"],
         "vercel_deploy": checks["vercel"]["ok"],
     }
@@ -316,8 +326,12 @@ def main() -> int:
         blockers.append("No executable OCR route found for final visual verification: install Tesseract or use macOS Swift/Vision.")
     if args.mode == "image-series" and not routes["album_pdf_export"]:
         blockers.append("No album PDF export route found: install reportlab or Pillow.")
+    if args.mode == "image-series" and not args.confirm_image_direct_output:
+        blockers.append("Image-series direct-output capability has not been confirmed. Verify the image model can save untouched full-page rasters and run receipts, then rerun with --confirm-image-direct-output.")
     if args.mode == "presentation-pdf" and not routes["deck_export"]:
         blockers.append("No browser route found for presentation PDF export.")
+    if args.mode == "presentation-pdf" and not checks["pdftotext"]["ok"]:
+        blockers.append("pdftotext is required to scan final PDF copy and language quality.")
     if args.deploy and args.mode == "interactive-html" and not routes["vercel_deploy"]:
         blockers.append("Vercel CLI is unavailable for the requested deployment.")
     blockers.extend(source_errors)
@@ -335,7 +349,8 @@ def main() -> int:
         },
         "manual_checks": {
             "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams.",
-            "image_asset_export": "After the first generated preview, verify that a PNG/JPG/WebP can be saved into the selected mode's local asset directory. A chat-only preview is not a deliverable asset."
+            "image_asset_export": "Verify that a PNG/JPG/WebP can be saved into the selected mode's local asset directory. A chat-only preview is not a deliverable asset.",
+            "image_series_direct_output": "For image-series mode, verify the model can generate the complete Chinese infographic as one untouched raster file and that a run receipt plus raw output hash can be preserved. Post-composed pages are not allowed."
         },
         "blockers": blockers,
     }

@@ -2,9 +2,9 @@
 
 ## Product Bar
 
-The result must feel like a deliberately art-directed visual lesson, not an AI dashboard, a document pasted into slides, or twenty repetitions of one card layout. It should be more explanatory than a conventional teaching PPT and more evidence-grounded than a visual summary.
+The result must feel like a deliberately art-directed, self-reading visual consulting report, not an AI dashboard, a document pasted into slides, a low-density keynote deck, or twenty repetitions of one card layout. It should be more explanatory than a conventional teaching PPT and more evidence-grounded than a visual summary.
 
-It must also feel presentable. Every page needs a clear focal point, readable speaking order, and enough breathing room to work on a projected screen. A correct but report-like PDF fails PPT mode.
+Every page needs a clear focal point, readable scan order, sufficient explanation, and enough breathing room to remain legible. A page that only works when a presenter fills in missing logic fails PPT mode.
 
 ## First Three Slides
 
@@ -19,7 +19,7 @@ Within the title slide and first two content slides, a reviewer should understan
 
 Reject generic agenda slides, audience descriptions, production framing, and template names.
 
-Require a paper overview by slide 2 and an argument map by slide 3. A list of chapter names or three contribution cards is not an argument map unless it shows how the parts connect and why the evidence supports the conclusion.
+Require the paper overview and argument map within the opening sequence before detail. They may share one page when simple. A list of chapter names or three contribution cards is not an argument map unless it shows how the parts connect and why the evidence supports the conclusion.
 
 ## Preview Difference
 
@@ -51,13 +51,13 @@ Record `layout_family` on each slide. No single content layout family should occ
 
 Do not repeat one main composition for more than three consecutive teaching slides. Across a medium or detailed deck, use at least four materially different composition families.
 
-## Presentation Rhythm
+## Reading Rhythm
 
-Deliberately alternate opening question or tension, visual explanation, concrete example, source evidence, conclusion, and transition. Use section beats to reset attention without adding empty agenda pages.
+Deliberately alternate framing questions, visual explanation, concrete examples, source evidence, conclusions, and synthesis. Use section beats to reset attention without adding empty agenda pages.
 
-Read each page aloud during review. If a presenter must read a paragraph verbatim, split or rewrite it. If a page has no obvious first thing to look at, redesign it. Include some low-density, high-impact pages; reserve dense composition for evidence where density is justified.
+Read each page without narration during review. If a reader cannot reconstruct the claim, mechanism, evidence, and implication from the page, add the missing explanation or split the topic. If a page has no obvious first thing to look at, redesign it.
 
-Low density must be intentional. Require a recorded reason and cap low-density pages at roughly one quarter of teaching pages. A sentence with a few unlabeled boxes is not a high-impact page.
+Low-density pages are rare and intentional. A sentence with a few unlabeled boxes does not count as a high-impact page.
 
 ## Size And Legibility
 
@@ -98,6 +98,9 @@ Reject the deck when:
 - animations distract from reading or cause layout shifts
 - every page has report-card density and no presentational breathing room
 - the deck is merely image-series cards resized onto 16:9 pages
+- most pages contain too little information to stand alone
+- a page title names a topic but does not state the question or conclusion
+- exact evidence is replaced by a generated illustration
 
 ## Required Visual Review
 
@@ -111,5 +114,7 @@ Render every slide, then review:
 6. label readability
 7. overflow, collision, and clipping
 8. first-slide and first-content-slide specificity
+9. independent-reading completeness
+10. conclusion -> explanation -> evidence -> implication structure where relevant
 
 Record concrete failures and fixes in `qa/qa-report.json`. A manifest checkbox without rendered screenshots is not enough.

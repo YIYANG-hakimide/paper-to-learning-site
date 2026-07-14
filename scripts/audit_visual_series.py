@@ -21,6 +21,129 @@ except Exception:
 
 
 BITMAP_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+FORBIDDEN_PUBLIC_PATTERNS = (
+    (r"面向无专业背景(?:大学生)?|面向初学者", "audience targeting"),
+    (r"本页旨在|这里需要(?:让|告诉)(?:用户|读者)|需要让(?:用户|读者)", "internal teaching intent"),
+    (r"生成教学图|generated asset|prompt summary|image prompt|manifest|preflight|regression|测试页|回归样本", "production language"),
+    (r"值得注意的是|不难发现|接下来(?:我们)?(?:将)?深入|由此可见", "generic transition"),
+    (r"赋能|颠覆|全新范式|革命性|重塑", "inflated generic wording"),
+)
+
+
+def chinese_ratio(text: str) -> float:
+    chinese = len(re.findall(r"[\u3400-\u9fff]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    return chinese / max(1, chinese + latin)
+
+
+def public_copy_issues(text: str) -> list[str]:
+    issues: list[str] = []
+    for pattern, label in FORBIDDEN_PUBLIC_PATTERNS:
+        if re.search(pattern, text, re.I):
+            issues.append(label)
+    if len(re.findall(r"不是[^。！？\n]{0,36}而是", text)) > 1:
+        issues.append("repeated not-but contrast syntax")
+    if len(re.findall(r"不仅[^。！？\n]{0,36}(?:更|还)", text)) > 1:
+        issues.append("repeated not-only contrast syntax")
+    if len(re.findall(r"从[^。！？\n]{1,24}到[^。！？\n]{1,24}", text)) > 3:
+        issues.append("repeated from-to framing")
+    return issues
+
+
+def validate_native_generation_contract(item: dict, asset: Path | None = None, root: Path | None = None) -> list[str]:
+    issues: list[str] = []
+    if item.get("production_method") != "model-single-pass":
+        issues.append("production_method must be model-single-pass")
+    integration = item.get("text_integration", {})
+    if integration.get("mode") != "in-model":
+        issues.append("text_integration.mode must be in-model")
+    if integration.get("planned_before_generation") is not True:
+        issues.append("in-model text was not planned before generation")
+    provenance = item.get("generation_provenance", {})
+    for field in (
+        "provider",
+        "model",
+        "request_id",
+        "prompt_sha256",
+        "run_receipt_path",
+        "run_receipt_sha256",
+        "provider_response_path",
+        "provider_response_sha256",
+        "raw_output_path",
+        "raw_output_sha256",
+    ):
+        if not provenance.get(field):
+            issues.append(f"generation_provenance is missing {field}")
+    if provenance.get("final_asset_is_direct_output") is not True:
+        issues.append("final_asset_is_direct_output must be true")
+    if item.get("model_name") and provenance.get("model") and str(item.get("model_name")) != str(provenance.get("model")):
+        issues.append("model_name does not match generation_provenance.model")
+    if provenance.get("pixel_postprocess_operations") not in ([], None):
+        issues.append("pixel_postprocess_operations must be empty")
+    if provenance.get("pixel_postprocess_operations") is None:
+        issues.append("pixel_postprocess_operations must be recorded")
+    if asset and asset.exists():
+        package_root = root or asset.parents[2]
+        raw_rel = provenance.get("raw_output_path")
+        raw_path = (package_root / str(raw_rel)).resolve() if raw_rel else None
+        if raw_path:
+            try:
+                raw_path.relative_to(package_root.resolve() / "raw" / "model-outputs")
+            except ValueError:
+                issues.append("raw_output_path must be under raw/model-outputs")
+        if raw_path and raw_path == asset.resolve():
+            issues.append("raw model output path must differ from the final asset path")
+        if not raw_path or not raw_path.exists():
+            issues.append("raw model output is missing")
+        else:
+            raw_hash = file_hash(raw_path)
+            if clean_hash(provenance.get("raw_output_sha256")) != raw_hash:
+                issues.append("raw_output_sha256 is missing or incorrect")
+            if raw_hash != file_hash(asset):
+                issues.append("final bitmap does not byte-match the raw model output")
+        receipt_rel = provenance.get("run_receipt_path")
+        receipt_path = (package_root / str(receipt_rel)).resolve() if receipt_rel else None
+        if receipt_path:
+            try:
+                receipt_path.relative_to(package_root.resolve() / "raw" / "receipts")
+            except ValueError:
+                issues.append("run_receipt_path must be under raw/receipts")
+        if not receipt_path or not receipt_path.exists():
+            issues.append("generation run receipt is missing")
+        elif clean_hash(provenance.get("run_receipt_sha256")) != file_hash(receipt_path):
+            issues.append("run_receipt_sha256 is missing or incorrect")
+        else:
+            receipt = load_json(receipt_path)
+            if receipt.get("schema_version") != 1:
+                issues.append("generation receipt schema_version must be 1")
+            expected_receipt = {
+                "provider": provenance.get("provider"),
+                "model": provenance.get("model"),
+                "prompt_sha256": clean_hash(provenance.get("prompt_sha256")),
+                "output_sha256": clean_hash(provenance.get("raw_output_sha256")),
+                "request_id": provenance.get("request_id"),
+            }
+            for field, expected in expected_receipt.items():
+                actual = clean_hash(receipt.get(field)) if field.endswith("sha256") else receipt.get(field)
+                if not expected or actual != expected:
+                    issues.append(f"generation receipt does not match {field}")
+        response_rel = provenance.get("provider_response_path")
+        response_path = (package_root / str(response_rel)).resolve() if response_rel else None
+        if response_path:
+            try:
+                response_path.relative_to(package_root.resolve() / "raw" / "provider-responses")
+            except ValueError:
+                issues.append("provider_response_path must be under raw/provider-responses")
+        if not response_path or not response_path.exists():
+            issues.append("provider/tool response record is missing")
+        elif clean_hash(provenance.get("provider_response_sha256")) != file_hash(response_path):
+            issues.append("provider_response_sha256 is missing or incorrect")
+        else:
+            response_text = response_path.read_text(encoding="utf-8", errors="replace")
+            for expected in (str(provenance.get("request_id", "")), str(provenance.get("model", "")), clean_hash(provenance.get("raw_output_sha256"))):
+                if expected and expected not in response_text:
+                    issues.append("provider/tool response record is not bound to request/model/output")
+    return issues
 
 
 def file_hash(path: Path) -> str:
@@ -108,6 +231,35 @@ def validate_album_pdf(
     return issues
 
 
+def detect_repeated_slide_chrome(paths: list[Path]) -> list[str]:
+    if len(paths) < 6 or Image is None or ImageChops is None or ImageStat is None:
+        return []
+    signatures: list[tuple[object, object]] = []
+    try:
+        for path in paths:
+            with Image.open(path) as image:
+                gray = image.convert("L")
+                width, height = gray.size
+                top = gray.crop((0, 0, width, max(1, int(height * 0.14)))).resize((96, 16))
+                bottom = gray.crop((0, max(0, int(height * 0.90)), width, height)).resize((96, 12))
+                signatures.append((top.copy(), bottom.copy()))
+    except Exception:
+        return ["Could not inspect image edge bands for repeated slide chrome."]
+    threshold_count = max(4, int(len(paths) * 0.60))
+    for index, (top, bottom) in enumerate(signatures):
+        matches = 1
+        for other_index, (other_top, other_bottom) in enumerate(signatures):
+            if other_index == index:
+                continue
+            top_delta = sum(ImageStat.Stat(ImageChops.difference(top, other_top)).mean)
+            bottom_delta = sum(ImageStat.Stat(ImageChops.difference(bottom, other_bottom)).mean)
+            if top_delta < 2.5 and bottom_delta < 2.5:
+                matches += 1
+        if matches >= threshold_count:
+            return [f"Repeated near-identical top/bottom rails detected across {matches}/{len(paths)} images; the album may be portrait slides with shared chrome."]
+    return []
+
+
 def has_review_lenses(passes: list[dict]) -> bool:
     lens_text = " ".join(str(item.get("lens", "")).lower() for item in passes if isinstance(item, dict))
     return (
@@ -115,6 +267,20 @@ def has_review_lenses(passes: list[dict]) -> bool:
         and any(token in lens_text for token in ("information", "completeness", "信息", "完整"))
         and any(token in lens_text for token in ("narrative", "novice", "logic", "叙事", "新手", "逻辑"))
     )
+
+
+def has_full_review_lenses(passes: list[dict]) -> bool:
+    lens_text = " ".join(str(item.get("lens", "")).lower() for item in passes if isinstance(item, dict))
+    groups = (
+        ("visual", "design", "美观", "视觉"),
+        ("information", "completeness", "信息", "完整"),
+        ("narrative", "teaching", "logic", "叙事", "教学", "逻辑"),
+        ("novice", "comprehension", "新手", "理解"),
+        ("factual", "evidence", "accuracy", "事实", "证据", "准确"),
+        ("copy", "ai tone", "public", "文案", "ai味", "公开"),
+        ("technical", "render", "ocr", "技术", "渲染"),
+    )
+    return all(any(token in lens_text for token in group) for group in groups)
 
 
 def run_actual_ocr(paths: list[Path]) -> tuple[dict[str, dict] | None, str | None]:
@@ -176,16 +342,19 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
         errors.append("Teaching inventory says the paper has experiments but experiments[] is empty.")
     final_items = {str(item.get("id")): item for item in manifest.get("items", []) if item.get("id")}
     for concept in inventory.get("hard_concepts", []):
-        for field in ("term", "plain_label", "field_definition", "plain_explanation", "paper_specific_meaning", "common_misunderstanding", "definition_item_ids"):
+        for field in ("term", "plain_label", "field_definition", "plain_explanation", "paper_specific_meaning", "author_usage", "common_misunderstanding", "definition_item_ids", "visible_definition_labels"):
             if not concept.get(field):
                 errors.append(f"Hard concept {concept.get('id', '[unknown]')} is missing {field}.")
         concept_id = str(concept.get("id", ""))
+        visible_labels = {str(value) for value in concept.get("visible_definition_labels", [])}
         for item_id in concept.get("definition_item_ids", []):
             item = final_items.get(str(item_id))
             if not item:
                 errors.append(f"Hard concept {concept_id} references missing definition item {item_id}.")
             elif concept_id not in {str(value) for value in item.get("explained_concept_ids", [])}:
                 errors.append(f"Definition item {item_id} does not declare explained_concept_ids coverage for {concept_id}.")
+            elif not visible_labels.issubset({str(value) for value in item.get("expected_labels", [])}):
+                errors.append(f"Definition item {item_id} expected_labels do not expose every explanation layer for {concept_id}.")
     for experiment in inventory.get("experiments", []):
         for field in (
             "comparison_objects",
@@ -201,8 +370,11 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
         setup_ids = experiment.get("setup_item_ids", [])
         result_ids = experiment.get("result_item_ids", [])
         limitation_ids = experiment.get("limitation_item_ids", [])
-        if not setup_ids or not result_ids or not limitation_ids:
-            errors.append(f"Experiment {experiment.get('id', '[unknown]')} needs setup_item_ids, result_item_ids, and limitation_item_ids.")
+        image_requirement = (experiment.get("mode_requirement") or {}).get("image-series")
+        if image_requirement not in {"must-cover", "optional", "not-applicable"}:
+            errors.append(f"Experiment {experiment.get('id', '[unknown]')} has invalid image-series mode_requirement.")
+        if image_requirement == "must-cover" and (not setup_ids or not result_ids):
+            errors.append(f"Selected experiment {experiment.get('id', '[unknown]')} needs setup_item_ids and result_item_ids.")
         for item_id in [*setup_ids, *result_ids, *limitation_ids]:
             if str(item_id) not in final_items:
                 errors.append(f"Experiment {experiment.get('id', '[unknown]')} references missing final item {item_id}.")
@@ -216,7 +388,11 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
         valid_results = [ordered_ids.index(str(item_id)) for item_id in result_ids if str(item_id) in final_items]
         if valid_setup and valid_results and max(valid_setup) >= min(valid_results):
             errors.append(f"Experiment {experiment.get('id', '[unknown]')} setup pages must precede result pages.")
-    for formula in inventory.get("formula_or_algorithm_items", []):
+    for formula in [
+        item
+        for item in inventory.get("formula_or_algorithm_items", [])
+        if (item.get("mode_requirement") or {}).get("image-series") == "must-cover"
+    ]:
         for field in ("expression_or_name", "plain_explanation", "expected_tokens", "render_item_ids"):
             if not formula.get(field):
                 errors.append(f"Formula/algorithm {formula.get('id', '[unknown]')} is missing {field}.")
@@ -229,9 +405,7 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
                 errors.append(f"Formula item {item_id} expected_labels do not cover the required formula tokens.")
     groups = {
         "hard_concepts": "hard_concept_coverage",
-        "formula_or_algorithm_items": "formula_coverage",
         "experiments": "experiment_coverage",
-        "major_figures": "major_figure_coverage",
         "central_claims": "central_claim_coverage",
     }
     for inventory_key, coverage_key in groups.items():
@@ -252,7 +426,11 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
                 continue
             status = item.get("status")
             level = entry.get("required_level", "core")
-            omission_allowed = level == "secondary" or (level == "major" and size_mode == "concise")
+            mode_requirement = (entry.get("mode_requirement") or {}).get("image-series")
+            if mode_requirement not in {"must-cover", "optional", "not-applicable"}:
+                errors.append(f"Teaching inventory item has invalid image-series mode_requirement: {inventory_key}:{item_id}")
+            selected = mode_requirement == "must-cover"
+            omission_allowed = not selected or level == "secondary" or (level == "major" and size_mode == "concise")
             if status == "omitted":
                 if not omission_allowed or not item.get("reason"):
                     errors.append(f"Required teaching item was omitted without an allowed reason: {inventory_key}:{item_id}")
@@ -265,11 +443,9 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
     if missing:
         errors.append(f"Central claims are missing evidence bundles: {sorted(missing)}")
     for bundle in bundles:
-        for field in ("bundle_id", "claim_id", "final_item_ids", "source_ids", "source_excerpt_or_asset", "visible_source_cue", "chinese_explanation", "evidence_meaning", "limitation"):
+        for field in ("bundle_id", "claim_id", "final_item_ids", "source_ids", "source_excerpt_sha256", "chinese_explanation", "evidence_meaning"):
             if not bundle.get(field):
                 errors.append(f"Evidence bundle is missing {field}.")
-        if bundle.get("source_cue_ocr_pass") is not True:
-            errors.append(f"Image-series evidence bundle source cue has not passed OCR: {bundle.get('bundle_id')}")
 
 
 def main() -> int:
@@ -305,8 +481,8 @@ def main() -> int:
             errors.append("Invalid storyboard.json")
 
     if manifest:
-        if str(manifest.get("manifest_schema_version")) != "0.4":
-            errors.append("Manifest schema version must be 0.4.")
+        if str(manifest.get("manifest_schema_version")) != "0.5":
+            errors.append("Manifest schema version must be 0.5.")
         if manifest.get("output_mode") != "image-series":
             errors.append("Manifest output_mode must be image-series.")
         reader_language = str(manifest.get("reader_language", ""))
@@ -362,62 +538,38 @@ def main() -> int:
 
         acts = storyboard.get("acts", []) if storyboard else []
         roles = {str(act.get("learning_role")) for act in acts if act.get("learning_role")}
-        if not {"problem", "prerequisite", "method", "evidence", "limitation"}.issubset(roles):
-            errors.append("Image series lacks the complete teaching arc.")
+        if not {"problem", "method"}.issubset(roles):
+            errors.append("Image series must at least establish the problem and the paper's method/argument.")
 
         argument_map = storyboard.get("paper_argument_map", {}) if storyboard else {}
-        for field in ("main_question", "thesis", "argument_steps", "evidence_route", "conclusion", "limitation"):
+        for field in ("main_question", "thesis", "argument_steps", "evidence_route", "conclusion"):
             if not argument_map.get(field):
                 errors.append(f"Storyboard paper_argument_map is missing {field}.")
-        if len(argument_map.get("argument_steps", [])) < 3:
+        argument_steps = argument_map.get("argument_steps") or []
+        evidence_route = argument_map.get("evidence_route") or []
+        if not isinstance(argument_steps, list) or not isinstance(evidence_route, list):
+            errors.append("Storyboard paper_argument_map argument_steps/evidence_route must be lists.")
+            argument_steps, evidence_route = [], []
+        if len(argument_steps) < 3:
             errors.append("Storyboard paper_argument_map needs at least three ordered argument steps.")
-        if len(argument_map.get("evidence_route", [])) < 2:
+        if len(evidence_route) < 2:
             errors.append("Storyboard paper_argument_map needs an explicit evidence route.")
 
-        opening_roles = [str(item.get("sequence_role", "")) for item in items[:3]]
-        if not any(role in {"paper-overview", "overview-and-argument-map"} for role in opening_roles[:2]):
-            errors.append("A paper overview must appear by image 2.")
-        if not any(role in {"argument-map", "overview-and-argument-map"} for role in opening_roles):
-            errors.append("An argument map must appear by image 3.")
+        opening_policies = [str(item.get("page_policy", "")) for item in items[:3]]
+        if "fixed-context" not in opening_policies:
+            errors.append("A fixed-context whole-paper map must appear within the first three images.")
+        if "fixed-core-contribution" not in opening_policies:
+            errors.append("A fixed-core-contribution map must appear within the first three images.")
         all_sequence_roles = [str(item.get("sequence_role", "")) for item in items]
-        valid_sequence_roles = {
-            "cover-thesis",
-            "paper-overview",
-            "argument-map",
-            "overview-and-argument-map",
-            "prerequisite",
-            "framework-overview",
-            "method-detail",
-            "argument-detail",
-            "worked-example",
-            "experiment-setup",
-            "evidence",
-            "conclusion",
-            "limitation",
-            "recap",
-        }
-        invalid_roles = sorted({role for role in all_sequence_roles if role not in valid_sequence_roles})
-        if invalid_roles:
-            errors.append(f"Image series contains invalid sequence_role values: {invalid_roles}")
-        if "overview-and-argument-map" not in all_sequence_roles:
-            if "paper-overview" in all_sequence_roles and "argument-map" in all_sequence_roles and all_sequence_roles.index("paper-overview") > all_sequence_roles.index("argument-map"):
-                errors.append("Paper overview must precede the argument map.")
-        for role in ("conclusion", "limitation", "recap"):
-            if role not in all_sequence_roles:
-                errors.append(f"Image series is missing required closing role: {role}")
-        if "recap" in all_sequence_roles and all_sequence_roles[-1] != "recap":
-            errors.append("The final image must be the learner recap/reconstruction page.")
-        recap_expected = storyboard.get("recap_expected_concepts", [])
-        if len(recap_expected) < 5:
-            errors.append("Storyboard recap_expected_concepts must cover at least problem, method, evidence, conclusion, and limitation.")
+        if any(not role for role in all_sequence_roles):
+            errors.append("Every image must record a paper-specific sequence_role.")
         if "recap" in all_sequence_roles:
+            recap_expected = storyboard.get("recap_expected_concepts", [])
+            if len(recap_expected) < 4:
+                errors.append("A planned recap needs recap_expected_concepts covering the paper's core logic.")
             recap_item = items[all_sequence_roles.index("recap")]
             if not set(map(str, recap_expected)).issubset({str(value) for value in recap_item.get("recap_concepts", [])}):
                 errors.append("Final recap image does not cover all recap_expected_concepts.")
-        if all(role in all_sequence_roles for role in ("evidence", "conclusion", "limitation", "recap")):
-            positions = [all_sequence_roles.index(role) for role in ("evidence", "conclusion", "limitation", "recap")]
-            if positions != sorted(positions):
-                errors.append("Closing teaching order must be evidence -> conclusion -> limitation -> recap.")
         detail_positions = [index for index, role in enumerate(all_sequence_roles) if role in {"method-detail", "argument-detail", "worked-example", "experiment-setup", "evidence"}]
         if "prerequisites_required" not in storyboard:
             errors.append("Storyboard must record prerequisites_required and its rationale.")
@@ -440,8 +592,6 @@ def main() -> int:
         method_stage_count = storyboard.get("method_stage_count")
         if not isinstance(method_stage_count, int) or method_stage_count < 0:
             errors.append("Storyboard must record a non-negative method_stage_count.")
-        elif method_stage_count >= 3 and storyboard.get("worked_example_required") is not True:
-            errors.append("A method with three or more stages must require a worked example.")
         if "paper_has_experiments" not in storyboard:
             errors.append("Storyboard must record paper_has_experiments.")
         elif storyboard.get("paper_has_experiments") is True:
@@ -489,7 +639,7 @@ def main() -> int:
             if clean_hash(source_meta.get("main_text_inventory_sha256")) != file_hash(source_path):
                 errors.append("Source inventory hash is missing or incorrect.")
 
-        argument_records = [*argument_map.get("argument_steps", []), *argument_map.get("evidence_route", [])]
+        argument_records = [*argument_steps, *evidence_route]
         argument_record_ids: set[str] = set()
         for record in argument_records:
             if not isinstance(record, dict):
@@ -507,23 +657,41 @@ def main() -> int:
             for final_item_id in record.get("final_item_ids", []):
                 if str(final_item_id) not in set(item_ids):
                     errors.append(f"paper_argument_map references missing final item id: {final_item_id}")
-        opening_item_records = [item for item in items[:3] if item.get("sequence_role") in {"paper-overview", "argument-map", "overview-and-argument-map"}]
+        opening_item_records = [item for item in items[:3] if item.get("page_policy") in {"fixed-context", "fixed-core-contribution"}]
         covered_argument_ids = {str(value) for item in opening_item_records for value in item.get("covered_argument_step_ids", [])}
         if argument_record_ids - covered_argument_ids:
             errors.append(f"Opening overview/argument-map images do not visibly cover argument records: {sorted(argument_record_ids - covered_argument_ids)}")
 
         design = manifest.get("design_brief", {})
-        for field in ("art_direction_thesis", "paper_motif", "motif_source_basis", "topic_specific_objects", "visual_direction", "typography_plan", "evidence_style", "forbidden_styles"):
+        for field in (
+            "art_direction_thesis",
+            "paper_motif",
+            "motif_source_basis",
+            "topic_specific_objects",
+            "visual_direction",
+            "typography_plan",
+            "color_roles",
+            "shared_style_block",
+            "diagram_grammars",
+            "forbidden_styles",
+            "forbidden_slide_chrome",
+        ):
             if not design.get(field):
                 errors.append(f"Design brief is missing {field}.")
+        aspect_ratio_policy = str(manifest.get("aspect_ratio_policy", ""))
         target_ratio = str(manifest.get("target_aspect_ratio", ""))
-        if target_ratio not in {"3:4", "4:3", "16:9", "custom"}:
-            errors.append("Manifest must record target_aspect_ratio.")
+        if aspect_ratio_policy not in {"uniform", "adaptive"}:
+            errors.append("Manifest must record aspect_ratio_policy as uniform or adaptive.")
+        if aspect_ratio_policy == "uniform" and target_ratio not in {"3:4", "4:3", "16:9", "custom"}:
+            errors.append("Uniform image series must record target_aspect_ratio.")
+        if aspect_ratio_policy == "adaptive" and not manifest.get("adaptive_aspect_ratio_rationale"):
+            errors.append("Adaptive image series requires adaptive_aspect_ratio_rationale.")
         if target_ratio == "custom" and not manifest.get("custom_aspect_ratio_rationale"):
             errors.append("Custom aspect ratio requires a rationale.")
 
         declared_paths: set[str] = set()
         hashes: dict[str, str] = {}
+        generation_request_ids: set[str] = set()
         layout_counts: dict[str, int] = {}
         actual_ocr_records: dict[str, dict] = {}
         if args.strict:
@@ -541,8 +709,16 @@ def main() -> int:
                 "source_ids",
                 "layout_family",
                 "path",
+                "aspect_ratio",
+                "diagram_grammar",
+                "safe_area",
+                "exactness_risk",
+                "text_ownership",
                 "production_method",
                 "sequence_role",
+                "page_policy",
+                "visible_title",
+                "standalone_explanation_labels",
                 "information_groups",
                 "reader_takeaway",
                 "teaching_units",
@@ -550,8 +726,16 @@ def main() -> int:
                 if not item.get(field):
                     errors.append(f"Item {index} is missing {field}.")
             role = str(item.get("sequence_role", ""))
+            if item.get("page_policy") not in {"fixed-context", "fixed-core-contribution", "dynamic"}:
+                errors.append(f"Item {index} has invalid page_policy.")
+            if item.get("text_ownership") != "in-model":
+                errors.append(f"Item {index} text_ownership must be in-model.")
+            if item.get("forbidden_slide_chrome") is not True:
+                errors.append(f"Item {index} must forbid slide chrome.")
+            if item.get("deletion_test_passed") is not True:
+                errors.append(f"Item {index} did not pass the visual deletion test.")
             groups = item.get("information_groups", [])
-            required_groups = 1 if index == 1 else (3 if role in {"paper-overview", "argument-map", "overview-and-argument-map", "experiment-setup", "evidence", "recap"} else 2)
+            required_groups = 3 if item.get("page_policy") in {"fixed-context", "fixed-core-contribution"} else (1 if index == 1 else 2)
             if len(groups) < required_groups:
                 errors.append(f"Item {index} has too few information groups for {role or 'its teaching role'}: {len(groups)}/{required_groups}.")
             if len(groups) > 4 or len({json.dumps(group, sort_keys=True, ensure_ascii=False) for group in groups}) != len(groups):
@@ -570,35 +754,6 @@ def main() -> int:
             teaching_unit_names = [str(unit.get("claim_or_concept", "")) for unit in teaching_units]
             if len(set(teaching_unit_names)) != len(teaching_unit_names):
                 errors.append(f"Item {index} repeats the same teaching unit.")
-            if role == "evidence":
-                evidence_objects = item.get("source_evidence_objects", [])
-                if not evidence_objects:
-                    errors.append(f"Evidence item {index} has no source_evidence_objects.")
-                for evidence in evidence_objects:
-                    for field in (
-                        "evidence_id",
-                        "source_id",
-                        "source_page",
-                        "object_type",
-                        "reader_question",
-                        "asset_path",
-                        "asset_sha256",
-                        "crop_bbox",
-                        "display_width_px",
-                        "display_height_px",
-                        "annotated_regions",
-                    ):
-                        if evidence.get(field) in (None, "", []):
-                            errors.append(f"Evidence item {index} source object is missing {field}.")
-                    if evidence.get("readable_at_final_size") is not True:
-                        errors.append(f"Evidence item {index} contains a source crop that is not readable at final size.")
-                    evidence_asset = root / str(evidence.get("asset_path", ""))
-                    if not evidence_asset.exists() or evidence_asset.suffix.lower() not in BITMAP_SUFFIXES:
-                        errors.append(f"Evidence item {index} source crop is missing or not a bitmap: {evidence.get('asset_path')}")
-                    elif clean_hash(evidence.get("asset_sha256")) != file_hash(evidence_asset):
-                        errors.append(f"Evidence item {index} source crop hash is missing or incorrect.")
-                    if evidence.get("display_width_px", 0) < 500 or evidence.get("display_height_px", 0) < 280:
-                        errors.append(f"Evidence item {index} source crop is displayed too small for teaching.")
             if role == "worked-example":
                 example = item.get("worked_example", {})
                 for field in ("input", "stages", "output", "source_ids"):
@@ -622,9 +777,16 @@ def main() -> int:
             actual_hash = file_hash(asset)
             if clean_hash(item.get("asset_sha256")) != actual_hash:
                 errors.append(f"Image hash is missing or incorrect: {rel}")
-            if actual_hash in hashes and not item.get("reuse_reason"):
-                errors.append(f"Duplicate bitmap without reuse reason: {hashes[actual_hash]} and {rel}")
+            if actual_hash in hashes:
+                errors.append(f"Duplicate final bitmap is not allowed in image-series mode: {hashes[actual_hash]} and {rel}")
             hashes[actual_hash] = rel
+            request_id = str(item.get("generation_provenance", {}).get("request_id", ""))
+            if request_id in generation_request_ids:
+                errors.append(f"Duplicate image-generation request_id is not allowed: {request_id}")
+            elif request_id:
+                generation_request_ids.add(request_id)
+            for issue in validate_native_generation_contract(item, asset, root):
+                errors.append(f"Image {index} native-generation contract failed: {issue}.")
             if Image is not None:
                 try:
                     with Image.open(asset) as image:
@@ -634,8 +796,10 @@ def main() -> int:
                     if item.get("width_px") != width or item.get("height_px") != height:
                         errors.append(f"Manifest dimensions are missing or incorrect: {rel}")
                     expected_ratios = {"3:4": 3 / 4, "4:3": 4 / 3, "16:9": 16 / 9}
-                    if target_ratio in expected_ratios and abs((width / height) - expected_ratios[target_ratio]) > 0.06:
-                        errors.append(f"Image aspect ratio does not match series target {target_ratio}: {rel} ({width}x{height})")
+                    item_ratio = str(item.get("aspect_ratio", ""))
+                    ratio_to_check = target_ratio if aspect_ratio_policy == "uniform" else item_ratio
+                    if ratio_to_check in expected_ratios and abs((width / height) - expected_ratios[ratio_to_check]) > 0.06:
+                        errors.append(f"Image aspect ratio does not match declared ratio {ratio_to_check}: {rel} ({width}x{height})")
                 except Exception:
                     errors.append(f"Unreadable image file: {rel}")
             if item.get("crop_checked") is not True or item.get("reviewer_status") != "passed":
@@ -683,8 +847,17 @@ def main() -> int:
             ]
             if missing_anchors:
                 errors.append(f"Final image OCR does not contain teaching-unit visual anchors {missing_anchors[:5]}: {rel}")
-            generated = item.get("production_method") in {"generated", "generated-composite"}
-            if generated and index > 1:
+            required_standalone_text = [str(item.get("visible_title", "")), *map(str, item.get("standalone_explanation_labels", []))]
+            missing_standalone = [value for value in required_standalone_text if value and value not in ocr_text]
+            if missing_standalone:
+                errors.append(f"Final image is not standalone-readable; OCR misses title/explanation anchors {missing_standalone[:5]}: {rel}")
+            if reader_language.lower().startswith("zh") and chinese_ratio(ocr_text) < 0.45:
+                errors.append(f"Chinese-reader image is not Chinese-dominant enough: {rel}")
+            copy_issues = public_copy_issues(ocr_text)
+            if copy_issues:
+                errors.append(f"Final image public copy has AI/process residue {copy_issues}: {rel}")
+            generated = item.get("production_method") == "model-single-pass"
+            if generated:
                 labels = item.get("diagram_labels", [])
                 semantic_map = item.get("visual_semantic_map", [])
                 integration = item.get("text_integration", {})
@@ -701,24 +874,15 @@ def main() -> int:
                 relation_labels = [str(label) for label in item.get("visual_relation_labels", [])]
                 if len(relation_labels) < 2 or any(label not in ocr_text for label in relation_labels):
                     errors.append(f"Generated teaching image visual relationship is not anchored by OCR-visible labels: {rel}")
-                if integration.get("mode") not in {"in-model", "reserved-zone-overlay", "source-annotation"}:
-                    errors.append(f"Generated teaching image has no valid text-integration mode: {rel}")
+                if integration.get("mode") != "in-model":
+                    errors.append(f"Generated teaching image must use in-model text integration: {rel}")
                 if integration.get("planned_before_generation") is not True:
                     errors.append(f"Generated teaching image labels were not planned before generation: {rel}")
-                if integration.get("native_resolution_composite") is not True:
-                    errors.append(f"Generated teaching image text was not composed at native output resolution: {rel}")
-                if integration.get("mode") == "reserved-zone-overlay" and integration.get("label_zones_planned") is not True:
-                    errors.append(f"Reserved-zone overlay lacks planned label zones: {rel}")
                 visual_language = str(item.get("in_image_text_language", "")).lower()
                 if reader_language.lower().startswith("zh") and not any(token in visual_language for token in ("zh", "chinese", "中文")):
                     errors.append(f"Chinese-reader teaching image is not recorded as Chinese-dominant: {rel}")
-            if item.get("production_method") in {"generated", "generated-composite"} and not item.get("model_name"):
+            if item.get("production_method") == "model-single-pass" and not item.get("model_name"):
                 errors.append(f"Generated image does not record the real model name: {rel}")
-            if item.get("claim_role") in {"source_claim_to_verify", "supported_conclusion"}:
-                source_cue = str(item.get("visible_source_cue", "")).strip()
-                ocr_text = str(item.get("ocr_text", ""))
-                if not source_cue or item.get("source_cue_ocr_pass") is not True or source_cue not in ocr_text:
-                    errors.append(f"Factual image lacks a reader-visible, OCR-verified source cue: {rel}")
 
         if count and layout_counts:
             dominant_layout, dominant_count = max(layout_counts.items(), key=lambda entry: entry[1])
@@ -736,6 +900,7 @@ def main() -> int:
                     break
             else:
                 streak = 1
+        errors.extend(detect_repeated_slide_chrome([root / str(item.get("path", "")) for item in items if item.get("path")]))
 
         final_dir = root / "assets" / "images"
         packaged = {
@@ -791,7 +956,7 @@ def main() -> int:
                 "direction_or_value",
                 "evidence_items",
                 "evidence_strength",
-                "limitation",
+                "boundary_handling",
             ):
                 if not claim.get(field):
                     errors.append(f"Claim evidence entry is missing {field}.")
@@ -806,6 +971,26 @@ def main() -> int:
                 supporting = [item for item in claim.get("evidence_items", []) if item.get("supports_vs_illustrates") == "supports" and item.get("evidence_kind") != "generated_visual"]
                 if not supporting:
                     errors.append("A supported conclusion has no non-generated supporting evidence.")
+                for evidence in supporting:
+                    for field in ("evidence_id", "evidence_kind", "source_id", "asset_or_excerpt_path", "asset_or_excerpt_sha256"):
+                        if not evidence.get(field):
+                            errors.append(f"Supporting evidence is missing {field} for claim {claim.get('claim_id')}.")
+                    if evidence.get("evidence_kind") not in {"source_figure", "source_table", "source_paragraph", "source_experiment", "source_formula", "source_algorithm"}:
+                        errors.append(f"Supporting evidence has an invalid evidence_kind: {evidence.get('evidence_kind')}")
+                    source_id = str(evidence.get("source_id", ""))
+                    if source_ids and source_id not in source_ids:
+                        errors.append(f"Supporting evidence references a missing source id: {source_id}")
+                    evidence_rel = str(evidence.get("asset_or_excerpt_path", ""))
+                    evidence_path = (root / evidence_rel).resolve() if evidence_rel else None
+                    if evidence_path:
+                        try:
+                            evidence_path.relative_to(root.resolve())
+                        except ValueError:
+                            errors.append(f"Supporting evidence path points outside package: {evidence_rel}")
+                    if not evidence_path or not evidence_path.exists():
+                        errors.append(f"Supporting evidence asset/excerpt is missing: {evidence_rel}")
+                    elif clean_hash(evidence.get("asset_or_excerpt_sha256")) != file_hash(evidence_path):
+                        errors.append(f"Supporting evidence hash is missing or incorrect: {evidence_rel}")
         qa = manifest.get("qa", {})
         for field in (
             "all_images_reviewed",
@@ -821,13 +1006,15 @@ def main() -> int:
             "album_pdf_checked",
             "glyph_integrity_checked",
             "template_residue_checked",
-            "source_crop_readability_checked",
+            "native_generation_provenance_checked",
+            "standalone_readability_checked",
         ):
             if qa.get(field) is not True:
                 errors.append(f"Image-series QA has not passed {field}.")
         adversarial_passes = qa.get("adversarial_passes", [])
-        if len(adversarial_passes) < 3 or not has_review_lenses(adversarial_passes):
-            errors.append("Image-series QA must record visual, information-completeness, and narrative/novice reviews.")
+        review_rounds = {str(item.get("round")) for item in adversarial_passes if isinstance(item, dict) and item.get("round") is not None}
+        if len(review_rounds) < 2 or not has_full_review_lenses(adversarial_passes):
+            errors.append("Image-series QA must record at least two rounds covering visual, information, teaching logic, novice comprehension, factual accuracy, public copy, and technical rendering.")
         qa_report_path = root / "qa" / "qa-report.json"
         qa_report = load_json(qa_report_path) if qa_report_path.exists() else {}
         if not qa_report:

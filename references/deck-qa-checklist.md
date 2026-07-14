@@ -8,7 +8,7 @@
 - [ ] Storyboard previous/next ids and bridges match the real adjacent page order.
 - [ ] Every final generated image was planned for an existing storyboard slide before generation.
 - [ ] The deck opens with the paper's real problem, not production framing.
-- [ ] A complete paper overview appears by slide 2 and an argument map appears by slide 3.
+- [ ] The opening establishes the paper question, overview, and argument map before detail; simple papers may combine them.
 - [ ] The outline follows learner questions and causal logic.
 - [ ] Prerequisites appear before technical use.
 - [ ] World/data construction, training, simulation/inference, and evaluation are separated where relevant.
@@ -42,6 +42,7 @@
 - [ ] The requested source file hash, page count, title, storyboard, manifest, and final deck all refer to the same paper.
 - [ ] Important paper figures/tables appear in readable form.
 - [ ] Multi-panel figures are split or individually annotated when needed.
+- [ ] Every important figure/table explains what it shows, how to read it, baseline/metric, result, supported conclusion, and a limitation when relevant.
 - [ ] Experimental setup and metric meaning appear before result claims.
 - [ ] Every important result states baseline, metric, direction/value, evidence, and limitation.
 - [ ] Generated images never serve as the sole proof of a conclusion.
@@ -61,11 +62,12 @@
 - [ ] The first slide and first content slide feel paper-specific, not templated.
 - [ ] Slide `layout_family` distribution was checked; one repeated composition does not dominate without a paper-specific reason.
 - [ ] Storyboard order, manifest slide order, HTML order, PNG export order, and PDF order match.
-- [ ] Each page has an obvious focal point and speaking order.
-- [ ] The deck was read aloud and report-like paragraphs were split or rewritten.
-- [ ] Section beats, low-density emphasis pages, and evidence-dense pages form a deliberate presentation rhythm.
-- [ ] Low-density pages have explicit reasons and do not exceed one quarter of teaching pages.
-- [ ] Projected-screen legibility was checked, not only laptop readability.
+- [ ] Each page has an obvious focal point and scan order.
+- [ ] Every teaching page was reviewed without narration and remains understandable on its own.
+- [ ] Section beats and evidence-dense pages form a deliberate reading rhythm without empty agenda filler.
+- [ ] Report-level information density was checked; low-density pages are rare and justified.
+- [ ] Laptop reading and full-page PDF legibility were checked.
+- [ ] Public copy passed `public-copy-style.md`, including internal-process leakage, repeated contrast syntax, empty conclusions, and template repetition.
 
 ## Export
 

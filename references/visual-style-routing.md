@@ -13,7 +13,7 @@ Every output needs an art-direction thesis. Readability is necessary but not suf
 - Keep one coherent typography, palette, material, and illustration system while varying composition by teaching job.
 - Make the central visual explain a relationship, mechanism, comparison, scene, or evidence-reading task; beauty without teaching value is decoration.
 - Preserve chart/data semantics before beautifying presentation.
-- Let generated imagery handle scenes, mechanisms, spatial relationships, and metaphors; use deterministic composition for exact text, values, citations, formulas, and tables.
+- Let generated imagery handle scenes, mechanisms, spatial relationships, and metaphors. Use deterministic composition for exact text, values, citations, formulas, and tables in PPT/HTML only; image-series pages remain untouched model outputs.
 - Use a fixed composition stage for PPT and source-anchored explanations for HTML.
 - Explore progressively: preview lightly, lock the direction, then expand it consistently.
 - For unfamiliar historical, scientific, cultural, technical, or branded objects, gather factual and visual references before generation. Record the stable recognition cues, sources consulted, and misleading cues deliberately avoided.
@@ -30,7 +30,7 @@ Before generating previews, identify:
 - audience and reading density
 - factual risks: what must not be visually invented or romanticized
 
-When multiple directions are genuinely needed, propose three different but plausible previews using real paper content. One should be restrained and highly readable, one should be more expressive and topic-specific, and one may be an experimental hybrid. When the user or paper already determines the direction, create one representative preview to save time.
+Only generate style previews when the user asked for them. Otherwise infer one direction and proceed.
 
 ## Routing Examples
 
@@ -73,21 +73,22 @@ Use notebook, blackboard, geometric construction, proof map, symbol cards, or tr
 
 ## Image-Series Art Direction
 
-- Use 3:4 portrait by default and compose for album reading.
-- Allow higher information density than PPT: one main question plus 2-4 supporting visual groups.
+- Choose the ratio from the diagram grammar: wide for pipelines, systems, and comparisons; portrait for vertical paths and layered maps.
+- Allow integrated explanation, but keep one main relationship and split any image that becomes crowded.
 - Make pages vivid through scenes, material, spatial hierarchy, expressive diagrams, and concrete examples.
-- Alternate mechanism, scene, evidence, comparison, timeline, and recap forms while preserving one visual system.
+- Alternate mechanism, scene, comparison, timeline, knowledge map, and causal/evidence-chain forms while preserving one visual world.
 - Reject a sequence that repeats one social-card template with different text.
-- At contact-sheet scale, the series should show a clear opening, development, evidence section, and ending.
+- Reject slide chrome, fixed title cards, page footers, and post-composed text/evidence layers.
+- At contact-sheet scale, the series should show a clear opening and progressive deepening.
 
 ## PPT Art Direction
 
-- Design for presentation: immediate focal point, large hierarchy, short spoken-language copy, breathing room, chapter beats, and deliberate transitions.
-- Use more pages instead of increasing text density.
-- Establish a clear order between title, question, image, and conclusion.
-- Reserve dense layouts for source evidence and comparison pages.
+- Design for independent reading: conclusion-led title, immediate focal point, clear scan order, report-level density, and deliberate chapter transitions.
+- Use more pages instead of shrinking text, but do not create empty keynote filler.
+- Establish a clear order between judgment, explanation, evidence, and implication.
+- Reserve the densest layouts for source evidence and comparison pages.
 - Avoid report pages that feel like article screenshots or image-series cards placed on a 16:9 canvas.
-- Keep the deck understandable asynchronously while ensuring every page also works when projected and explained aloud.
+- Keep the deck understandable asynchronously; projection is secondary.
 
 ## Preview Rules
 

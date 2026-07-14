@@ -34,6 +34,8 @@ Use subagents only when the user explicitly requested delegated/subagent review 
 
 2. **Teaching comprehension**
    - Can a non-specialist college student understand the problem, method, evidence, and conclusion?
+   - Does the opening overview and argument map explain the whole paper before detailed reading?
+   - Can each argument-map node jump to the corresponding source paragraph, figure, or evidence module?
    - Does each chapter start with a learner-facing question/evidence map, not a production brief?
    - Are hard terms explained from general definition to paper-specific use?
    - Are terms introduced at the first point where they block comprehension, not later in a separate glossary?
@@ -56,7 +58,7 @@ Use subagents only when the user explicitly requested delegated/subagent review 
    - If original text screenshots are used, are they only for layout-sensitive evidence and paired with selectable source text, Chinese reading, plain explanation, `source_id`, page number, and a reason?
    - Is there no screenshot-only source prose?
    - Does every main reading block have a stable `source_id` or equivalent paragraph anchor that appears in the manifest?
-   - Does every non-Chinese source paragraph have Chinese translation or explanation?
+   - Does every non-Chinese source paragraph have both a faithful Chinese translation and a separate plain-language explanation?
    - Does every long English passage have proportional Chinese explanation?
    - Are all paper figures/tables included near the relevant paragraphs?
    - Is each figure/table counted once in a primary evidence position, rather than only in a gallery or drawer?
@@ -100,7 +102,7 @@ Use this 10-point acceptance test after the three passes:
 
 1. A reader knows within five seconds what paper this is, where to begin, and how to switch chapter/language.
 2. Main text is readable in-page, not hidden in a PDF iframe, screenshot, or collapsed raw dump.
-3. Every included main-text paragraph has original text, Chinese reading, and a plain-language explanation.
+3. In complete-reader mode, every expected main-text paragraph is included with original text, Chinese reading, and a plain-language explanation.
 4. Long or dense paragraphs have enough Chinese explanation to unpack their variables, claims, steps, or limits.
 5. Terms are clickable exactly where they appear in the sentence and open the full explanation ladder.
 6. Each chapter starts with a problem map and ends with what the reader should now understand.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Paper to Learning"
-  short_description: "Turn papers into explainer albums, presentation PDFs, or interactive HTML"
-  default_prompt: "Use $paper-to-learning-site to explain this paper for a non-specialist college reader. Ask whether I want an explainer image album, presentation PDF, or interactive HTML, then build the selected output with an opening paper map, source-linked explanations, and novice-friendly visuals."
+  short_description: "Turn papers into native infographics, reading-first PDF reports, or interactive HTML"
+  default_prompt: "Use $paper-to-learning-site to explain this paper for a non-specialist college reader. Ask all intake questions once, then build either a native generated infographic album, a reading-first visual consulting report PDF, or a complete interactive bilingual HTML reader."

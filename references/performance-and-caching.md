@@ -30,7 +30,7 @@ Invalidate only the affected layer and its downstream dependents. Never reuse a 
 
 1. Run preflight and source hash check.
 2. Reuse a valid cache when available.
-3. Produce one inferred style preview when visual direction is clear.
+3. Skip style previews unless the user requested one.
 4. Lock storyboard before expensive generation.
 5. Generate 3-6 independent assets per batch, in parallel only when the provider supports it reliably.
 6. Run structural checks after every batch.
@@ -41,9 +41,9 @@ Invalidate only the affected layer and its downstream dependents. Never reuse a 
 
 - Do not create HTML, PDF, and image-series outputs when only one was selected.
 - Do not generate an image for a slide that can be clearer and more accurate as HTML text, a source crop, formula, or deterministic chart.
-- Do not regenerate approved images because nearby copy changed.
+- Do not regenerate approved PPT/HTML visuals because nearby copy changed. Image-series copy is part of the bitmap, so a copy correction requires regenerating that image.
 - Do not render all slides after every small text edit; use changed-page sampling, then one final full render.
-- Do not generate three visual styles when the user already chose one or the paper strongly determines the style.
+- Do not generate visual-style alternatives unless the user asked for them.
 - Do not rerun expensive adversarial reviews before the storyboard and first complete draft exist.
 
 ## Time Budget Awareness

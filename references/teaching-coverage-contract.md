@@ -16,18 +16,21 @@ Also record the current source-inventory hash, derivation rules version, `deriva
 - `major_figures[]`: id, source ids, panels/rows/columns that require explanation, and linked claims
 - `central_claims[]`: id, source ids, role, baseline, metric/dimension, direction/value, evidence ids, and limitation
 
+Every inventory entry also records `mode_requirement` with `image-series`, `presentation-pdf`, and `interactive-html` values: `must-cover`, `optional`, or `not-applicable`. Decide these values from the complete paper, selected size, and user focus before storyboarding.
+
 Record the inventory path and hash in every mode-specific manifest.
 
 ## Coverage Requirements
 
-Every inventory id must map to final output items or an explicit omission allowed by the selected size mode.
+Every inventory id must receive a mode-specific selection decision before storyboarding.
 
-- Concise mode may omit secondary items, but never the core method, strongest supporting evidence, or central limitation.
-- Medium mode covers every central claim and major method component plus the most important formulas/figures/experiments.
-- Detailed mode covers all teaching-inventory items except truly redundant appendix material, with reasons.
+- Image series prioritizes selected hard concepts, core methods/architecture, central experiments/evaluation, causal/evidence chains, and central claims. It does not need to reproduce every major source figure or formula.
+- PPT concise mode may omit secondary items, but never the core method, strongest supporting evidence, or central limitation.
+- PPT medium mode covers every central claim and major method component plus the most important formulas/figures/experiments.
+- PPT detailed mode covers all teaching-inventory items except truly redundant appendix material, with reasons.
 - Complete HTML covers all main-text source blocks and all teaching-inventory items.
 
-Record coverage arrays:
+Record coverage arrays appropriate to the mode:
 
 - `hard_concept_coverage[]`
 - `formula_coverage[]`
@@ -35,7 +38,7 @@ Record coverage arrays:
 - `major_figure_coverage[]`
 - `central_claim_coverage[]`
 
-Each entry names the inventory id, final item/page/block ids, and `covered|omitted` status with reason when omitted.
+Each entry names the inventory id, whether it was selected for this mode, final item/page/block ids, and `covered|omitted` status with reason when omitted.
 
 ## Evidence Bundle
 
@@ -45,13 +48,13 @@ For every central method claim or conclusion, create an `evidence_bundle` adapte
 - `claim_id`
 - `final_item_ids`
 - `source_ids`
-- `source_excerpt_or_asset`
-- `visible_source_cue`
+- `source_excerpt_or_asset` for PPT/HTML, or `source_excerpt_sha256` for image series
+- `visible_source_cue` for PPT/HTML
 - `chinese_explanation`
 - `evidence_meaning`
-- `limitation`
+- `limitation` when relevant
 
-Image series: the visible source cue and Chinese explanation must be present in the composed bitmap and OCR-verified.
+Image series: the Chinese explanation must be present in the native generated bitmap and OCR-verified. Source traceability remains internal; citations and source crops are not required inside the image.
 
 PPT: the source cue and Chinese explanation must be visible on the page or immediately linked evidence page; DOM/page ids must resolve.
 

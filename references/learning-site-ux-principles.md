@@ -14,6 +14,13 @@ Every major screen should answer:
 - Which word, figure, table, or claim can I inspect?
 - How do I return to the paragraph I came from?
 
+Before the first detailed chapter, the reader also needs:
+
+- a compact whole-paper overview
+- an argument map showing how the claims and evidence connect
+- the smallest prerequisite path needed for the next chapter
+- clickable routes from overview/argument nodes into the exact source paragraphs and figures
+
 ## Design-System Brief
 
 Before coding, write a mini `DESIGN.md` for the paper. Borrow the `awesome-design-md` habit of turning style into explicit tokens and rules, not vibes:
@@ -57,6 +64,8 @@ Forbidden in public UI, alt text, side notes, and aria labels:
 - placeholders: `待补`, `coming soon`, `undefined`, `null`
 
 Rewrite them as reader-facing learning copy.
+
+Also apply `public-copy-style.md`: remove repeated `不是……而是……`, empty transitions, inflated AI language, duplicate conclusions, and page copy that sounds like a generation brief.
 
 Do not treat canonical source terms as forbidden just because they contain a sensitive word. For example, a paper about `prompt tuning` may show and translate that term. What is forbidden is production copy such as `image prompt`, `prompt summary`, `生成 prompt`, or visible instructions about how assets were generated.
 

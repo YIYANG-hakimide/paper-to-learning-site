@@ -10,7 +10,7 @@ Always use a real image-generation route for planned teaching visuals unless the
 2. An installed image-generation skill or plugin that returns a local raster file.
 3. A configured OpenAI-compatible Images API or CLI using the user's existing credentials.
 4. Another user-configured image model or service that can return local PNG/JPEG/WebP assets.
-5. Manual SVG/CSS diagram only after explicit approval.
+5. Manual SVG/CSS diagram only for PPT/HTML after explicit approval; never for image-series output.
 
 Do not require the provider to be Codex. The skill should describe the desired image, labels, dimensions, and QA contract independently of provider-specific syntax.
 
@@ -40,9 +40,9 @@ Normalize these capabilities in the manifest:
 Use the capability profile to adapt generation:
 
 - no native 16:9: generate the nearest wider ratio with strong safe margins, then crop only after checking no content is lost
-- low Chinese reliability: use fewer labels from the first attempt and reserve exact text for HTML
+- low Chinese reliability: do not use that provider for final image-series pages; switch to a model that can produce readable Chinese or ask the user for another route
 - reference-image support: provide paper figures or style previews only when they clarify objects or visual language, not to copy protected artwork
-- edit support: repair a local label or crop issue before regenerating the entire composition when reliable
+- edit support: useful for PPT/HTML assets; image-series mode still regenerates the complete final image when text or structure is wrong
 - low maximum resolution: use the asset for a smaller focused diagram or switch providers for a full-slide hero visual
 
 If no route can persist a local asset, stop before final delivery. A preview visible only in chat or a remote UI is not a deck asset.
@@ -68,12 +68,12 @@ Translate this packet into the selected provider's prompt format. Save the packe
 ## Fallback Behavior
 
 - OCR every generated image that contains text and compare recognized labels with the expected label list. Any wrong, missing, or garbled key label fails QA.
-- If Chinese text quality is weak, shorten labels and regenerate.
-- After two failed text attempts, switch to a low-text illustration plus exact HTML labels/callouts instead of accepting broken in-image text.
-- If the provider consistently garbles labels, generate a cleaner low-text illustration and place exact labels in HTML overlays only when the visual remains understandable and the user has not required all labels inside the image.
+- If Chinese text quality is weak, simplify the wording and regenerate the complete image.
+- For image-series mode, do not switch to HTML labels, overlays, source annotations, or a template compositor. Switch image providers or stop and ask the user.
+- For PPT/HTML, a low-text generated diagram plus exact surrounding HTML remains acceptable when it teaches more clearly.
 - If factual objects are unreliable, gather reference images/information or use a more schematic visual type.
 - If the selected model cannot meet the style or resolution requirement, try another configured model before asking for manual fallback.
-- Never create placeholder bitmap files, screenshots of manual SVG, or false manifest entries to satisfy counts.
+- Never create placeholder bitmap files, screenshots of manual SVG, post-composed image-series pages, or false manifest entries to satisfy counts.
 
 ## Attribution
 

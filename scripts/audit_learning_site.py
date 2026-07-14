@@ -1399,6 +1399,9 @@ PRODUCTION_TEXT_PATTERNS = [
     (r"哪些结论只是局部实验下成立", "internal reviewer prompt in side note"),
     (r"检查作者是否|需要验证|审稿时|作为审查|回归样本|测试样本|验收时", "internal reviewer or QA phrasing"),
     (r"本轮|这轮|上一版|当前版本|交付前|子 ?agent|subagent", "iteration/process phrasing"),
+    (r"本页旨在|这里需要(?:让|告诉)(?:用户|读者)|需要让(?:用户|读者)", "internal teaching intent"),
+    (r"值得注意的是|不难发现|接下来(?:我们)?(?:将)?深入|由此可见", "generic AI transition"),
+    (r"赋能|颠覆|全新范式|革命性|重塑", "inflated generic wording"),
     (r"章节小测|小测|测一下这章", "quiz-like public label; use chapter core recap wording"),
     (r"待补|占位|coming soon|undefined|null", "placeholder text"),
 ]
@@ -1406,6 +1409,62 @@ PRODUCTION_TEXT_PATTERNS = [
 
 def compact_text(value: str) -> str:
     return " ".join(value.split())
+
+
+def chinese_ratio(value: str) -> float:
+    chinese = len(re.findall(r"[\u3400-\u9fff]", value))
+    latin = len(re.findall(r"[A-Za-z]", value))
+    return chinese / max(1, chinese + latin)
+
+
+def inventory_source_text(data: dict[str, object]) -> str:
+    for key in ("all_main_text_blocks", "all_source_blocks", "main_text_blocks", "full_paper_blocks"):
+        blocks = data.get(key)
+        if isinstance(blocks, list):
+            return " ".join(
+                str(block.get("text") or block.get("source_text") or block.get("content") or "")
+                for block in blocks
+                if isinstance(block, dict)
+            )
+    return ""
+
+
+def run_actual_image_ocr(paths: list[Path]) -> tuple[dict[str, str], str | None]:
+    if not paths:
+        return {}, None
+    swift = shutil.which("swift")
+    vision_script = Path(__file__).with_name("ocr_images_vision.swift")
+    if swift and vision_script.exists() and sys.platform == "darwin":
+        result = subprocess.run(
+            [swift, str(vision_script), *[str(path.resolve()) for path in paths]],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=max(120, len(paths) * 20),
+        )
+        if result.returncode != 0:
+            return {}, f"Apple Vision OCR failed: {(result.stderr or result.stdout).strip()[:300]}"
+        try:
+            records = json.loads(result.stdout)
+            return {str(Path(record["path"]).resolve()): str(record.get("text", "")) for record in records}, None
+        except Exception as exc:
+            return {}, f"Apple Vision OCR returned invalid JSON: {exc}"
+    tesseract = shutil.which("tesseract")
+    if tesseract:
+        records: dict[str, str] = {}
+        for path in paths:
+            result = subprocess.run(
+                [tesseract, str(path), "stdout", "-l", "chi_sim+eng"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                return {}, f"Tesseract OCR failed for {path.name}: {(result.stderr or result.stdout).strip()[:240]}"
+            records[str(path.resolve())] = result.stdout
+        return records, None
+    return {}, "No executable strict OCR route found for generated HTML visuals."
 
 
 def normalized_text(value: str) -> str:
@@ -1666,6 +1725,12 @@ def audit_html(
             warnings.append(f"{path}:{line}: button has no visible text, aria-label, or title")
 
     if strict:
+        if len(re.findall(r"不是[^。！？\n]{0,36}而是", public_text_for_scan)) > 1:
+            errors.append(f"{path}: public UI overuses the templated '不是...而是...' contrast")
+        if len(re.findall(r"不仅[^。！？\n]{0,36}(?:更|还)", public_text_for_scan)) > 1:
+            errors.append(f"{path}: public UI overuses the templated '不仅...更/还...' contrast")
+        if len(re.findall(r"从[^。！？\n]{1,24}到[^。！？\n]{1,24}", public_text_for_scan)) > 3:
+            errors.append(f"{path}: public UI overuses templated '从...到...' framing")
         for pattern, label in PRODUCTION_TEXT_PATTERNS:
             if re.search(pattern, public_text_for_scan, re.I):
                 errors.append(f"{path}: public UI exposes internal production text ({label}); rewrite as reader-facing learning copy")
@@ -1798,8 +1863,8 @@ def audit_html(
     if manifest:
         if "_manifest_error" in manifest:
             errors.append(str(manifest["_manifest_error"]))
-        if str(manifest.get("manifest_schema_version")) != "0.3":
-            errors.append(f"{path}: manifest_schema_version must be 0.3")
+        if str(manifest.get("manifest_schema_version")) != "0.4":
+            errors.append(f"{path}: manifest_schema_version must be 0.4")
         if manifest.get("output_mode") != "interactive-html":
             errors.append(f"{path}: manifest output_mode must be interactive-html")
         scope_mode = manifest.get("scope_mode")
@@ -1850,6 +1915,66 @@ def audit_html(
         first_viewport_landmarks = manifest.get("first_viewport_landmarks")
         section_map = manifest.get("section_map")
         chapter_landmarks = manifest.get("chapter_landmarks")
+        learning_path = manifest.get("learning_path")
+        paper_argument_map = manifest.get("paper_argument_map")
+        learning_path_node_ids: set[str] = set()
+        if not isinstance(learning_path, dict):
+            errors.append(f"{path}: manifest needs learning_path with overview, prerequisites, chapters, and evidence links")
+        else:
+            for field in ("overview_dom_id", "argument_map_dom_id", "prerequisite_nodes", "chapter_nodes"):
+                if learning_path.get(field) in (None, "", []):
+                    errors.append(f"{path}: learning_path is missing {field}")
+            for dom_field in ("overview_dom_id", "argument_map_dom_id"):
+                dom_id = str(learning_path.get(dom_field, ""))
+                if dom_id and not re.search(rf'id=["\']{re.escape(dom_id)}["\']', text):
+                    errors.append(f"{path}: learning_path {dom_field} is not visible in HTML: {dom_id}")
+            learning_nodes = []
+            for field in ("prerequisite_nodes", "chapter_nodes"):
+                value = learning_path.get(field)
+                if not isinstance(value, list):
+                    errors.append(f"{path}: learning_path.{field} must be a list")
+                else:
+                    learning_nodes.extend(value)
+            learning_path_node_ids = {str(node.get("id")) for node in learning_nodes if isinstance(node, dict) and node.get("id")}
+            for index, node in enumerate(learning_nodes, 1):
+                if not isinstance(node, dict):
+                    errors.append(f"{path}: learning_path node {index} must be an object")
+                    continue
+                for field in ("id", "dom_id", "source_ids", "evidence_ids", "href"):
+                    if node.get(field) in (None, "", []):
+                        errors.append(f"{path}: learning_path node {index} is missing {field}")
+                dom_id = str(node.get("dom_id", ""))
+                href = str(node.get("href", ""))
+                if dom_id and not re.search(rf'id=["\']{re.escape(dom_id)}["\']', text):
+                    errors.append(f"{path}: learning_path node is not visible in HTML: {dom_id}")
+                if href and not re.search(rf'href=["\']{re.escape(href)}["\']', text):
+                    errors.append(f"{path}: learning_path node href is not rendered in HTML: {href}")
+                if not href.startswith("#") or not re.search(rf'id=["\']{re.escape(href.lstrip("#"))}["\']', text):
+                    errors.append(f"{path}: learning_path node has an invalid source/evidence target: {href}")
+                next_node_id = str(node.get("next_node_id", ""))
+                if next_node_id and next_node_id not in learning_path_node_ids:
+                    errors.append(f"{path}: learning_path node points to missing next_node_id: {next_node_id}")
+        if not isinstance(paper_argument_map, dict):
+            errors.append(f"{path}: manifest needs paper_argument_map")
+        else:
+            for field in ("main_question", "thesis", "argument_steps", "evidence_route", "conclusion", "limitation"):
+                if paper_argument_map.get(field) in (None, "", []):
+                    errors.append(f"{path}: paper_argument_map is missing {field}")
+            argument_steps = paper_argument_map.get("argument_steps") or []
+            evidence_route = paper_argument_map.get("evidence_route") or []
+            if not isinstance(argument_steps, list) or not isinstance(evidence_route, list):
+                errors.append(f"{path}: paper_argument_map argument_steps/evidence_route must be lists")
+                argument_steps, evidence_route = [], []
+            for record in [*argument_steps, *evidence_route]:
+                if not isinstance(record, dict):
+                    errors.append(f"{path}: paper_argument_map records must be objects")
+                    continue
+                for field in ("id", "text", "source_ids", "dom_id"):
+                    if record.get(field) in (None, "", []):
+                        errors.append(f"{path}: paper_argument_map record is missing {field}")
+                dom_id = str(record.get("dom_id", ""))
+                if dom_id and not re.search(rf'id=["\']{re.escape(dom_id)}["\']', text):
+                    errors.append(f"{path}: paper_argument_map node is not visible in HTML: {dom_id}")
         if expected_source_blocks is not None and not isinstance(expected_source, int):
             expected_source = expected_source_blocks
         if isinstance(expected_source, int) and isinstance(rendered_source, int) and rendered_source < expected_source:
@@ -1873,6 +1998,63 @@ def audit_html(
             errors.append(
                 f"{path}: manifest records image-generation downgrade/fallback without explicit user-approved fallback: '{image_model}'"
             )
+        if strict and isinstance(generated_visuals, list) and generated_visuals:
+            visual_paths = [
+                (root / str(item.get("path", ""))).resolve()
+                for item in generated_visuals
+                if isinstance(item, dict) and item.get("path") and (root / str(item.get("path", ""))).exists()
+            ]
+            actual_ocr_records, actual_ocr_error = run_actual_image_ocr(visual_paths)
+            if actual_ocr_error:
+                errors.append(f"{path}: {actual_ocr_error}")
+            for index, item in enumerate(generated_visuals, 1):
+                if not isinstance(item, dict):
+                    errors.append(f"{path}: generated_visuals[{index}] must be an object")
+                    continue
+                visual_rel = str(item.get("path", ""))
+                visual_asset = (root / visual_rel).resolve() if visual_rel else None
+                if visual_asset:
+                    try:
+                        visual_asset.relative_to(root.resolve())
+                    except ValueError:
+                        errors.append(f"{path}: generated_visuals[{index}] path points outside site root: {visual_rel}")
+                if not visual_rel or not visual_asset or not visual_asset.exists():
+                    errors.append(f"{path}: generated_visuals[{index}] asset is missing: {visual_rel}")
+                    continue
+                if visual_rel not in text:
+                    errors.append(f"{path}: generated_visuals[{index}] is not embedded in HTML: {visual_rel}")
+                ocr_text = str(item.get("ocr_text", ""))
+                ocr_rel = str(item.get("ocr_artifact_path", ""))
+                expected_labels = [str(value) for value in item.get("expected_labels", []) if value]
+                if not ocr_text or not ocr_rel or not expected_labels or item.get("ocr_pass") is not True:
+                    errors.append(f"{path}: generated_visuals[{index}] needs OCR text, artifact, expected labels, and ocr_pass=true")
+                else:
+                    ocr_asset = (root / ocr_rel).resolve()
+                    try:
+                        ocr_asset.relative_to(root.resolve())
+                    except ValueError:
+                        errors.append(f"{path}: generated_visuals[{index}] OCR path points outside site root: {ocr_rel}")
+                    if not ocr_asset.exists():
+                        errors.append(f"{path}: generated_visuals[{index}] OCR artifact is missing: {ocr_rel}")
+                    else:
+                        stored_ocr = ocr_asset.read_text(encoding="utf-8", errors="replace")
+                        if stored_ocr.strip() != ocr_text.strip():
+                            errors.append(f"{path}: generated_visuals[{index}] OCR artifact disagrees with manifest")
+                        declared_hash = str(item.get("ocr_artifact_sha256", ""))
+                        if not declared_hash or file_sha256(ocr_asset) != declared_hash:
+                            errors.append(f"{path}: generated_visuals[{index}] OCR artifact hash is missing or incorrect")
+                actual_text = actual_ocr_records.get(str(visual_asset), "")
+                if not actual_text:
+                    errors.append(f"{path}: strict OCR returned no text for generated visual {visual_rel}")
+                missing_labels = [label for label in expected_labels if label not in actual_text]
+                if missing_labels:
+                    errors.append(f"{path}: generated visual OCR misses expected labels {missing_labels[:5]}: {visual_rel}")
+                copy_text = actual_text or ocr_text
+                if any(token in generated_visual_language for token in ("zh", "chinese", "中文")) and copy_text and chinese_ratio(copy_text) < 0.35:
+                    errors.append(f"{path}: Chinese generated visual is not Chinese-dominant enough: {visual_rel}")
+                for pattern, label in PRODUCTION_TEXT_PATTERNS:
+                    if re.search(pattern, copy_text, re.I):
+                        errors.append(f"{path}: generated visual exposes forbidden public copy ({label}): {visual_rel}")
         if strict:
             if expected_visuals and not image_model:
                 errors.append(f"{path}: manifest must record the actual image model used")
@@ -2043,6 +2225,12 @@ def audit_html(
                         has_learning_action = True
                 if not has_learning_action:
                     errors.append(f"{path}: interaction_inventory needs at least one non-decorative learning action beyond passive text/terms")
+                tested_path_nodes = interaction_inventory.get("learning_path_nodes_tested")
+                if learning_path_node_ids:
+                    if not isinstance(tested_path_nodes, list):
+                        errors.append(f"{path}: interaction_inventory needs learning_path_nodes_tested[]")
+                    elif {str(value) for value in tested_path_nodes} != learning_path_node_ids:
+                        errors.append(f"{path}: learning_path_nodes_tested does not cover every prerequisite/chapter node")
                 feynman_value = interaction_inventory.get("feynman_recaps") or interaction_inventory.get("feynman_scaffolds")
                 has_feynman_inventory = bool(
                     feynman_value is True
@@ -2097,6 +2285,14 @@ def audit_html(
                         except Exception as exc:
                             errors.append(f"{path}: source_fidelity inventory is not readable JSON: {exc}")
                             inventory_data = None
+                        if isinstance(inventory_data, dict):
+                            derived_source_text = inventory_source_text(inventory_data)
+                            if derived_source_text:
+                                derived_chinese_ratio = chinese_ratio(derived_source_text)
+                                if source_language.startswith("zh") and derived_chinese_ratio < 0.35:
+                                    errors.append(f"{path}: source_language is declared Chinese but source inventory is predominantly non-Chinese")
+                                if not source_language.startswith("zh") and derived_chinese_ratio > 0.80:
+                                    warnings.append(f"{path}: source inventory appears Chinese-dominant but source_language is {source_language}")
                         if strict and isinstance(inventory_data, dict) and str(source_fidelity.get("source_format", "")).lower() == "pdf":
                             has_selected_only = isinstance(inventory_data.get("selected_blocks"), list)
                             has_full_inventory = any(
@@ -2181,11 +2377,15 @@ def audit_html(
                     by_id = {str(item.get("inventory_id")): item for item in coverage if isinstance(item, dict) and item.get("inventory_id")}
                     for entry in entries:
                         inventory_id = str(entry.get("id", ""))
+                        mode_requirement = (entry.get("mode_requirement") or {}).get("interactive-html")
+                        if mode_requirement not in {"must-cover", "optional", "not-applicable"}:
+                            errors.append(f"{path}: teaching inventory item has invalid interactive-html mode_requirement: {inventory_key}:{inventory_id}")
                         coverage_item = by_id.get(inventory_id)
                         if not coverage_item:
-                            errors.append(f"{path}: teaching inventory item lacks coverage: {inventory_key}:{inventory_id}")
+                            if mode_requirement == "must-cover" or scope_mode == "complete":
+                                errors.append(f"{path}: teaching inventory item lacks coverage: {inventory_key}:{inventory_id}")
                         elif coverage_item.get("status") != "covered" or not coverage_item.get("final_item_ids"):
-                            if scope_mode == "complete" or not coverage_item.get("reason"):
+                            if mode_requirement == "must-cover" or scope_mode == "complete" or not coverage_item.get("reason"):
                                 errors.append(f"{path}: teaching item is not covered in final HTML: {inventory_key}:{inventory_id}")
                 central_ids = {str(item.get("id")) for item in teaching_inventory.get("central_claims", []) if item.get("id")}
                 bundle_ids = {str(item.get("claim_id")) for item in evidence_bundles if isinstance(item, dict) and item.get("claim_id")} if isinstance(evidence_bundles, list) else set()
@@ -2305,6 +2505,30 @@ def audit_html(
                                 errors.append(f"{path}: inline term '{term_id}' explanation linked_source_ids do not include trigger paragraph {source_id}")
                 if not isinstance(term_explanations, (list, dict)) or not term_explanations:
                     errors.append(f"{path}: manifest needs term_explanations with per-term definition/plain/paper-use/misread coverage")
+                else:
+                    explanation_records = list(term_explanations.values()) if isinstance(term_explanations, dict) else term_explanations
+                    for index, record in enumerate(explanation_records, 1):
+                        if not isinstance(record, dict):
+                            errors.append(f"{path}: term_explanations[{index}] must be an object")
+                            continue
+                        for field in (
+                            "field_definition",
+                            "plain_explanation",
+                            "paper_specific_meaning",
+                            "author_usage",
+                            "common_misunderstanding",
+                            "linked_source_ids",
+                            "visible_dom_ids",
+                        ):
+                            if record.get(field) in (None, "", []):
+                                errors.append(f"{path}: term_explanations[{index}] is missing {field}")
+                        visible_dom_ids = record.get("visible_dom_ids")
+                        if not isinstance(visible_dom_ids, list):
+                            errors.append(f"{path}: term_explanations[{index}].visible_dom_ids must be a list")
+                        else:
+                            for dom_id in visible_dom_ids:
+                                if not re.search(rf'id=["\']{re.escape(str(dom_id))}["\']', text):
+                                    errors.append(f"{path}: term explanation layer is not visible in HTML: {dom_id}")
                 high_risk_terms = [
                     "gradient",
                     "objective function",
@@ -2324,7 +2548,7 @@ def audit_html(
                 explained_text = json.dumps(term_explanations, ensure_ascii=False).lower() if isinstance(term_explanations, (dict, list)) else ""
                 for term in high_risk_terms:
                     if re.search(rf"\b{re.escape(term)}\b", public_text_for_scan, re.I) and term.lower() not in anchored_text and term.lower() not in explained_text:
-                        warnings.append(f"{path}: high-risk novice term appears without inline explanation coverage: {term}")
+                        errors.append(f"{path}: high-risk novice term appears without inline explanation coverage: {term}")
             term_strip_only_count = manifest.get("term_strip_only_count")
             if isinstance(term_strip_only_count, int) and term_strip_only_count > 0:
                 errors.append(f"{path}: manifest reports {term_strip_only_count} terms that only exist in detached strips")
@@ -2747,7 +2971,7 @@ def audit_html(
         errors.extend(render_errors)
         warnings.extend(render_warnings)
     elif strict and skip_browser:
-        warnings.append(f"{path}: browser probes skipped; run full --strict before final delivery")
+        errors.append(f"{path}: --strict cannot skip browser probes; use non-strict structural iteration instead")
 
     return errors, warnings
 

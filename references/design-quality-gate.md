@@ -2,7 +2,7 @@
 
 ## Benchmark
 
-Use the Agentopia reader quality as historical learning, not a template or ceiling. This file applies only to optional complete-reader mode. Choose the visual system that best fits the topic, audience, and source artifacts; do not force the Agentopia pixel style when another editorial, notebook, report, manga, or product-reader style would teach better.
+Use the Agentopia reader quality as historical learning, not a template or ceiling. This file applies to the default complete-reader HTML mode. Choose the visual system that best fits the topic, audience, and source artifacts; do not force the Agentopia pixel style when another editorial, notebook, report, manga, or product-reader style would teach better.
 
 The target is not "pretty enough"; it is a complete guided reader that preserves paragraph-level source text while making concepts and evidence understandable. A beautiful page that hides the source, shrinks evidence, or opens empty interactions fails.
 

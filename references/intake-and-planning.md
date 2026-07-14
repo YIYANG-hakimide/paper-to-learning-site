@@ -2,17 +2,17 @@
 
 ## Required Intake
 
-Ask unless already answered:
+Ask every unresolved item once in one compact message. Output mode has no default unless the request already implies it. After mode selection, the user may answer `其余全部默认`.
 
-1. 是否有想重点探讨、重点解释、或者希望读者特别关注的内容？
-2. 最终需要：`图片`、`PPT（PDF 演示稿）`、还是 `HTML 交互网页`？
-3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
+1. 输出：`图片`、`PPT（默认 PDF）`、或 `HTML`。
+2. 重点关注的问题。
+3. 是否接受“无专业背景大学生”的默认认知水平。
+4. 图片/PPT 的规模：精简、中等、详细、自动。
+5. 是否有风格描述或参考图；没有则自动决定。
+6. 是否要先看内容策划；是否要先生成一张样图。两项默认关闭。
+7. PPT 是否需要 `.pptx`；HTML 是否需要部署。两项默认关闭。
 
-For images or PPT, also ask:
-
-4. 规模选择：`精简（6-10）`、`中等（11-20）`、`详细（21以上）`、还是 `自动判断`？
-
-Use a compact structured intake. Do not ask the user to choose internal implementation details such as layout families, diagram types, extraction tools, or image providers.
+Defaults: no special focus, non-specialist college reader, automatic size, paper-derived visual direction, no planning preview, no sample, PDF-only PPT, local-only HTML. Do not ask about layout families, diagram taxonomies, providers, extraction tools, or other internal implementation details. Do not create a second approval step when the user chose the fast/default path.
 
 For HTML, default to `complete` source coverage. If the source is unusually long or the user asks for a quick guide, ask whether `curated` is acceptable before omitting main-text blocks.
 
@@ -52,7 +52,14 @@ Convert the paper into learner questions before final generation. Each image/pag
 - previous/next bridge
 - layout/composition family
 
-The story must cover problem, prerequisites, method, worked example when useful, evidence, conclusion, limitations, and learner reconstruction.
+The story must establish the whole-paper question and argument route before detail. Include prerequisites, methods, experiments, evidence, conclusions, boundaries, and reconstruction only where the source and selected mode need them.
+
+For image series, mark two required early items:
+
+- `fixed-context`: the paper's question, thesis, and argument route
+- `fixed-core-contribution`: the paper's main contribution, mechanism, or finding
+
+All other items are dynamic. Related teaching needs may share one image when they form one coherent learner question and remain readable.
 
 ## Mode-Specific Design Brief
 
@@ -67,9 +74,9 @@ Write concrete design rules derived from the paper:
 - public-copy tone and reader level
 - specific styles to avoid
 
-Images additionally define aspect ratio, information density, contact-sheet rhythm, and image text strategy.
+Images additionally define aspect ratio strategy, album rhythm, native in-model Chinese text strategy, direct-output provenance, and forbidden post-composition operations.
 
-PPT additionally defines 16:9 stage, presentation pacing, section beats, focal scale, and transition behavior.
+PPT additionally defines a 16:9 self-reading report stage, conclusion-led titles, evidence density, section logic, generated-visual ownership, and source-figure explanation strategy.
 
 HTML additionally defines source-text hierarchy, bilingual layout, navigation, interactions, mobile behavior, and deployment target.
 

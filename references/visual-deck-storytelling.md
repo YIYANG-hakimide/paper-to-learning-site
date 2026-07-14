@@ -6,7 +6,7 @@ Treat the deliverable as a visual lesson, not slides pasted from the paper and n
 
 ## Storyboard Gate
 
-After source inventory and style previews, write the entire storyboard before generating final visuals. Save it as `data/storyboard.json` and lock it only after the narrative arc passes review.
+After source inventory and any user-requested style preview, write the entire storyboard before generating final visuals. Save it as `data/storyboard.json` and lock it only after the narrative arc passes review.
 
 The storyboard must contain:
 
@@ -18,12 +18,15 @@ The storyboard must contain:
 
 For PPT, every page also records:
 
-- `presentation_beat`: tension, explanation, example, evidence, conclusion, transition, or recap
-- `spoken_takeaway`: the sentence a presenter should say aloud
+- `presentation_intent`: `reading-first`
+- `communication_job`: what the reader should understand, believe, or be able to judge after this page
+- `reasoning_role`: question, definition, mechanism, example, evidence, comparison, conclusion, boundary, or synthesis
+- `standalone_takeaway`: the conclusion a reader should retain
+- `reader_context`: the minimum context needed on the page
+- `so_what`: why the page matters to the paper's argument
 - `density_class`: low, medium, or evidence-dense
 - `section_reset`: whether this page visibly opens a new chapter
-- `reveal_order`: the intended visual reading/animation order
-- `estimated_seconds`: expected presentation time
+- `scan_order`: the intended reading order
 
 Avoid more than three consecutive evidence-dense pages without a reset, synthesis, or example.
 
@@ -41,14 +44,16 @@ Adapt act names and count to the paper, but preserve the learning functions. A d
 
 Do not make the learner infer the paper's structure from a sequence of detail pages.
 
-1. Cover/thesis: what question the paper asks and its answer in one sentence.
-2. Paper overview: problem, contribution, method/evidence route, and final takeaway on one page.
-3. Argument map: the causal or argumentative chain showing how the paper moves from premise to evidence to conclusion.
-4. Prerequisite map when needed: the smallest set of background concepts required for the next section.
+The opening must cover these jobs before detail:
 
-For concise outputs, pages 2 and 3 may be combined. For medium/detailed outputs, keep overview and argument map visually distinct. A generic agenda does not satisfy either role.
+1. What question the paper asks and its answer.
+2. The paper overview: problem, contribution, method/evidence route, and final takeaway.
+3. The argument map: how the paper moves from premise to evidence to conclusion.
+4. The smallest prerequisite set required for the next section.
 
-Only lightweight style previews may precede storyboard lock. Generate one when direction is clear and three only when alternatives are requested or genuinely needed. Every later image must reference an existing storyboard item id.
+The first three jobs may occupy one, two, or three pages according to complexity. A generic agenda does not satisfy any of them.
+
+Only a user-requested lightweight style preview may precede storyboard lock. Every later image must reference an existing storyboard item id.
 
 ## Recommended Arc
 
@@ -77,23 +82,24 @@ Do not force all 15 beats into every paper. Use only the beats that clarify the 
 Each slide must have:
 
 - one learner question as the title or clear framing
-- one sentence that answers it
+- a clear answer or judgment
 - one dominant teaching object
 - one source or evidence link when the slide makes a factual paper claim
 - one bridge that makes the next slide feel necessary
 - one owning act/chapter and one role in the overall arc
 - 2-4 visible information groups, a recorded scan order, and a standalone reader takeaway
+- enough definition, explanation, evidence, and implication to work without a presenter
 
 Dominant teaching objects may be generated illustrations, source figures, tables, formula breakdowns, timelines, annotated screenshots, short quotations, or worked examples.
 
 ## Density
 
-Default to reading-first density:
+Default to reading-first density. Use page role rather than one universal word limit:
 
-- title: one question, usually under 22 Chinese characters
-- answer: one or two sentences
-- body: no more than 80-140 Chinese characters unless the slide is explicitly an evidence or source-reading slide
-- labels: 2-7 Chinese characters each
+- overview/argument map: normally 250-450 Chinese characters across structured groups
+- concept/mechanism page: normally 180-350 characters plus a substantial visual
+- evidence/figure page: normally 250-600 characters plus a large readable source object
+- conclusion/boundary page: normally 120-300 characters
 - citations and footnotes: short, exact, and visibly secondary
 
 Do not confuse breathing room with emptiness. A page with a sentence plus a few unlabeled boxes is under-taught even when it is technically legible. Use `visual-page-teaching-contract.md` to record and review teaching units.
@@ -127,7 +133,7 @@ Generate or use a visual when the learner needs to understand:
 - the meaning of a dense source chart/table
 - an analogy that anchors an unfamiliar concept
 
-Use prose when precision, caveat, quotation, or exact definition matters more than shape. The strongest slide often combines a large visual with a short precise HTML explanation.
+Use prose when precision, caveat, quotation, or exact definition matters more than shape. The strongest page often combines a large visual with precise native text.
 
 ## Evidence Rhythm
 

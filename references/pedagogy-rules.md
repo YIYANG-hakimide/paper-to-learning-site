@@ -27,7 +27,8 @@ This section is mandatory for interactive HTML and becomes source-grounding guid
 For each paragraph or small paragraph group:
 
 - show source text
-- add translation when needed
+- for every non-Chinese source paragraph, add a faithful Chinese translation
+- add a separate plain-language explanation; translation cannot replace explanation
 - add a short "这段在推进什么" explanation
 - add "所以呢" when the paragraph contains a claim, result, or methodological step
 - add inline term triggers for concepts that would block understanding
@@ -53,15 +54,15 @@ If a source paragraph is long or contains formulas, experimental claims, or seve
 - Use one main question and 2-4 supporting visual groups per image.
 - Include enough Chinese explanation for the image to stand alone; do not rely on a separate caption file.
 - Use concrete examples and visual analogies, then state where the analogy stops being accurate.
-- Add short source/page cues for claims and evidence.
+- Keep claims internally linked to source evidence; do not force citations or source crops into the generated image.
 
 ### Presentation PDF
 
-- Keep the visible page concise enough to present aloud.
-- Put one spoken-language conclusion on each page.
+- Keep the visible page dense enough to read independently while preserving hierarchy.
+- Put one clear reader-facing conclusion or answer on each page.
 - Use a worked example before abstract evidence when it materially helps novices.
 - Move nuance into a second page rather than shrinking copy.
-- The PDF should remain understandable without a presenter, but should not read like a report pasted into slides.
+- The PDF should read like a designed visual consulting report, not a paper document pasted into slides.
 
 ### Interactive HTML
 

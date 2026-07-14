@@ -15,7 +15,7 @@ Use these user-centered constraints when designing image series, presentation PD
 ## Design Responses
 
 - Start each chapter with a problem map: what question is this section answering, what evidence will appear, and what the reader should know after.
-- In image/PPT modes, keep exact source quotations, figures, tables, formulas, page references, and evidence cues visible at the points where claims are taught. In complete HTML mode, keep paragraph-level original text visible and annotated. No mode may replace the paper with unsupported summaries.
+- In PPT mode, keep exact source quotations, figures, tables, formulas, page references, and evidence cues visible at the points where claims are taught. In image mode, keep source traceability internal and use generated explanation rather than source screenshots. In complete HTML mode, keep paragraph-level original text visible and annotated. No mode may replace the paper with unsupported summaries.
 - Attach definitions, examples, and "why this matters" to the exact sentence, term, figure, table cell, or equation where the reader needs them.
 - Encourage expert-like reading behaviors: summarize the current paragraph, inspect the data before accepting the conclusion, compare claim versus evidence, and note uncertainty.
 - Use progressive detail appropriate to the medium: separate images/pages for deeper explanation, and details-on-demand interactions in HTML.
@@ -26,7 +26,7 @@ Use these user-centered constraints when designing image series, presentation PD
 ## Skill Implications
 
 - The artifact is a learning scaffold first and a summary second.
-- Image/PPT modes must retain source evidence cues and page references; complete HTML mode must retain paragraph-level original text because annotations teach how to read the paper rather than replacing it.
+- PPT must retain visible source evidence cues and page references. Image series retains source evidence internally. Complete HTML retains paragraph-level original text because annotations teach how to read the paper rather than replacing it.
 - Every major figure/table should be introduced before its conclusion, so the reader learns to inspect evidence.
 - Term explanations should appear at the point of confusion, not in a separate glossary route.
 - Generated diagrams should externalize hidden structure: actors, steps, data flow, training loop, comparison baseline, and uncertainty.
@@ -34,7 +34,7 @@ Use these user-centered constraints when designing image series, presentation PD
 ## Learning Modes To Support
 
 - **Guided image series**: high-information visual route that can be read as an ordered album.
-- **Presentation PDF**: question-led route with speaking rhythm, focal visuals, evidence, conclusion, and limitations.
+- **Presentation PDF**: question-led, reading-first visual report with focal visuals, evidence, conclusions, and limitations that remain understandable without a presenter.
 - **Close reading**: paragraph-level original/translation with inline terms and side notes.
 - **Evidence mode**: figures/tables next to claims, with how-to-read guidance.
 - **Review mode**: checkpoints, flashcard-like terms, and chapter summaries.

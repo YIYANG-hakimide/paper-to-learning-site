@@ -7,7 +7,7 @@ Run a mode-aware tool preflight before extracting the source or building the out
 Run:
 
 ```bash
-python3 /path/to/paper-to-learning-site/scripts/preflight_learning_site.py --mode image-series
+python3 /path/to/paper-to-learning-site/scripts/preflight_learning_site.py --mode image-series --confirm-image-direct-output
 ```
 
 When a source file is already known, run the source-aware check:
@@ -39,6 +39,12 @@ Image generation availability has two levels:
 2. local asset route exists: the generated bitmap can be saved into the selected output package and referenced by its mode-specific manifest.
 
 Both must be true for a normal final build. If the tool only returns a chat preview, transient UI image, or no copyable local file path, report `blocked_by_local_image_generation_export` and stop before final delivery unless the user explicitly approves a lower-fidelity fallback. Do not continue by lowering `generated_visuals_expected` to `0`.
+
+Image-series mode adds a third requirement:
+
+3. direct final-page route exists: the model can generate the complete infographic with native Chinese text and save the untouched raster output. The workflow must preserve the raw output and generation receipt for hash comparison.
+
+If the preferred model fails, detect another configured image model first. If no capable route exists, ask the user how to connect one; do not silently build a post-composed substitute.
 
 ## Tool expectations
 

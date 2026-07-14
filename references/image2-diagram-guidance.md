@@ -2,9 +2,9 @@
 
 ## Use images as teaching tools
 
-Use Image 2 or the best available real image-generation model to create visuals that reduce cognitive load. Generated teaching images are the primary content of image-series mode, a major visual layer in PPT mode, and an in-context teaching aid in HTML mode.
+Use Image 2 or the best available real image-generation model to create visuals that reduce cognitive load. Generated teaching images are the complete final pages in image-series mode, a major visual layer in PPT mode, and an in-context teaching aid in HTML mode.
 
-Do not silently replace generated teaching images with hand-written SVG diagrams. If Image 2 is unavailable, follow `image-model-routing.md` and use another configured image model that returns local raster assets. If no real image route exists, stop and ask whether a lower-fidelity manual fallback is acceptable.
+Do not silently replace generated teaching images with hand-written SVG diagrams. If Image 2 is unavailable, follow `image-model-routing.md` and use another configured image model that returns local raster assets. In image-series mode, stop and ask the user to connect another image model or choose another output mode when no capable route exists. Manual fallback is only available for PPT/HTML after explicit approval.
 
 Do not treat an Image 2 chat preview as a delivered asset. A generated teaching image counts only after a real bitmap file is available inside the selected output package and referenced by its mode-specific manifest. PPT/HTML images must also be embedded in the rendered page; image-series assets are themselves the final pages.
 
@@ -13,7 +13,7 @@ Coverage follows the selected output, size mode, and storyboard:
 - concise mode prioritizes the core method and strongest blockers; related concepts may share one well-designed visual
 - medium mode normally gives each major logic unit a substantial visual treatment
 - detailed mode normally gives each major hard concept its own visual or focused micro-sequence
-- add visuals for method pipelines, world-building, data construction, training loops, experiment setup/comparison, and result interpretation when they materially reduce cognitive load
+- add visuals for hard terms, method pipelines, world-building, data construction, training loops, experiment setup/comparison, causal/evidence chains, and result interpretation when they materially reduce cognitive load
 - most image-series items and PPT teaching pages should contain a substantial visual object; use source evidence, formulas, deterministic charts, or worked examples where generation is the wrong tool
 
 ## Diagram types
@@ -43,11 +43,11 @@ For generated visuals, specify:
 - visual form: flowchart, scene, metaphor, consulting diagram, etc.
 - style tied to paper topic, era, objects, and emotional tone, not generic AI aesthetics or one fixed house style
 - for Chinese-bilingual sites, use Chinese as the dominant in-image language; include English only as short aliases for canonical terms when helpful
-- plan 3-7 short Chinese-dominant labels and concise explanatory callouts for any mechanism, overview, comparison, architecture, or multi-actor teaching visual
-- avoid long paragraphs, dense bilingual text, citations, or exact table values baked into the image
+- plan a clear Chinese title, native Chinese explanation, short labels, arrows, and callouts for any mechanism, overview, comparison, architecture, or multi-actor teaching visual
+- use enough text to make the image self-explanatory, but split the image when the text becomes crowded or too small
+- avoid dense bilingual duplication, citations, or unsupported exact table values baked into the image
 - avoid factual scores, rankings, percentages, or improvement claims inside the image unless those values are sourced and also explained in nearby HTML
-- explicitly reserve clean label/callout zones when exact Chinese text will be composed deterministically
-- use the selected aspect ratio: normally 3:4 portrait for image series and 16:9 for PPT; target at least 1536px on the long edge and validate labels at actual final size
+- choose the aspect ratio from the teaching structure for image series; use fixed 16:9 for PPT; target at least 1536px on the long edge and validate labels at actual final size
 - if the concept needs many labels, create several simpler images rather than one crowded image
 - produce bitmap assets (`.png`, `.jpg`, or `.webp`) unless the image tool returns another real generated-image format
 
@@ -63,15 +63,15 @@ Save the final provider-neutral prompt packet and prompt hash so the asset can b
 Example prompt:
 
 ```text
-Create a clean explainer diagram for a Chinese-bilingual learning site. Topic: supervised fine-tuning in this paper. Show three stages: 人类标注样例, 模型练习, 新任务评估. Use a warm pixel-world classroom metaphor with small characters, arrows, and simple icons. Use Chinese labels and 1-2 brief Chinese callouts inside the image; include short English aliases only when useful. Keep detailed definitions and bilingual explanation for nearby HTML. Avoid generic neon AI dashboard style.
+Create a complete Chinese explainer infographic. Topic: supervised fine-tuning in this paper. The image must stand alone. Use the title `监督微调：模型先看示范，再学习怎样回答`. Explain the general definition, a plain classroom analogy, and how this paper applies it. Show three stages: 人类标注样例, 模型练习, 新任务评估. Use a warm pixel-world classroom metaphor, clear arrows, short Chinese callouts, and a readable visual hierarchy. Keep `Supervised Fine-Tuning (SFT)` only as a small alias. Do not add a generic footer, slide frame, page number, source citation, or empty decorative card.
 ```
 
 ## Pairing With Final Output
 
-Every generated image needs a surrounding explanation layer appropriate to the mode:
+Every generated image needs an explanation strategy appropriate to the mode:
 
-- image series: the explanation may be composed directly into the final bitmap with short, structured copy and source cues
-- PPT: pair the image with concise slide text, citation, and speaker-friendly conclusion
+- image series: the complete title and explanation are generated natively as one full-frame bitmap; no later composition layer is allowed
+- PPT: pair the image with exact slide text, citation, and a standalone conclusion
 - HTML: pair it with selectable source/translation/explanation text
 
 In every mode, clarify:
@@ -81,19 +81,19 @@ In every mode, clarify:
 - how it maps to the paper
 - what simplification it makes
 
-Do not rely on an image alone for factual explanation.
+In image-series mode the image must stand alone, while internal source records still verify factual claims. In PPT/HTML, surrounding exact text and source evidence remain visible.
 
-Small amounts of text inside generated images are required when the visual contains a process, multiple actors, multiple panels, or a causal chain. The rule is "brief and visual", not "text-free": use short stage names, arrows, labels, and callout phrases inside the teaching composition, then put longer explanation in selectable HTML or surrounding slide copy.
+Generated images need enough native text to explain the visual relationship. Image-series pages may carry substantially more integrated explanation than PPT/HTML diagrams, but the text must remain readable and visually organized.
 
-Plan explanatory text before generation. Preferred routes:
+Plan explanatory text before generation.
 
-1. Ask the image model to generate the composition with short Chinese labels when it can render them reliably.
-2. Otherwise ask it to create named, visually integrated callout zones and anchors, then compose exact Chinese labels at the final bitmap resolution.
-3. For source figures, annotate the real crop rather than asking the model to redraw evidence.
+- Image series: ask the model to generate the entire final infographic with native Chinese title, explanation, labels, and relationships. If any important text is wrong, regenerate the entire image or switch models.
+- PPT/HTML: model-generated diagrams may use native labels, while exact surrounding copy, citations, formulas, and source evidence remain deterministic and selectable.
+- Source figures: use real crops and exact annotations only in PPT/HTML. Image-series mode may create an explanatory reinterpretation but must not present generated pixels as original evidence.
 
 Do not generate an unlabeled beautiful scene and try to rescue it with one sentence below the image. The final teaching image must expose its own reading order and element meanings.
 
-Borrow Guizang-style discipline for educational diagrams when appropriate: one central relationship, 3-5 short Chinese labels, quiet background, strong safe margins, and no dense legend inside the bitmap. If labels are wrong, tiny, or garbled, regenerate instead of accepting the asset.
+Borrow Guizang-style discipline for educational diagrams when appropriate: one central relationship, a clear visual hierarchy, quiet background, strong safe margins, and readable Chinese explanation. If labels are wrong, tiny, or garbled, regenerate instead of accepting or patching the asset.
 
 Do not prompt Chinese-bilingual explainer images with English-only labels such as "Sequential bottleneck" or "Parallel training" unless the user explicitly wants English-only visuals. Prefer `顺序瓶颈 / sequential bottleneck` or just `顺序瓶颈` when the concept is explained nearby in HTML.
 
@@ -117,6 +117,7 @@ Record generated visuals in the selected manifest:
 - in-image text language
 - diagram labels and visual semantic map
 - scan order and text-integration method
+- for image series: raw model output hash, final direct-output hash, generation receipt, and an empty pixel-postprocessing list
 - linked source ids or claim ids
 - factual values used and their source refs, if any
 
@@ -133,6 +134,6 @@ For each generated teaching image:
 
 If any generated image exists only as an in-chat preview, the deck/site is blocked. Record the blocker in QA if useful, but do not call the artifact complete and do not change expected counts to hide the gap.
 
-If the asset was manually drawn SVG, mark it as `manual-svg-fallback` and do not count it as an Image 2 generated visual.
+If a PPT/HTML asset was manually drawn SVG after explicit approval, mark it as `manual-svg-fallback` and do not count it as an Image 2 generated visual. Image-series mode never accepts this fallback.
 
 For positive tests and final delivery, actually call the selected real image-generation route. Do not create a placeholder PNG, screenshot an SVG, or write a model name in the manifest without a real generated bitmap copied into the correct mode-specific asset directory and placed at the concept it teaches.
