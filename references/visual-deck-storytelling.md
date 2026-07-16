@@ -27,7 +27,7 @@ For PPT, every page also records:
 - `density_class`: low, medium, or evidence-dense
 - `section_reset`: whether this page visibly opens a new chapter
 - `scan_order`: the intended reading order
-- `text_character_count`: public slide text excluding citations and text already legible inside evidence objects
+- `explanation_completeness`: whether the page contains the definition/context, reasoning, evidence/example, implication, and boundary needed for its role
 - `information_group_count`: the number of distinct, visible teaching groups
 - `visual_route`: `generated`, `image-to-image`, `deterministic`, `source-crop`, or a justified combination
 
@@ -95,17 +95,9 @@ Each slide must have:
 
 Dominant teaching objects may be generated illustrations, source figures, tables, formula breakdowns, timelines, annotated screenshots, short quotations, or worked examples.
 
-## Density
+## Density And Canvas Use
 
-Default to consulting/research-report density. Character ranges are diagnostics, not quotas; count public slide text but exclude citations and text already legible inside charts/tables:
-
-- overview/argument map: normally 400-700 Chinese characters across structured groups
-- concept/mechanism page: normally 350-650 characters plus a substantial visual
-- evidence/figure/comparison page: normally 450-900 characters plus a large readable source object
-- conclusion/boundary/synthesis page: normally 250-500 characters unless it is a deliberately sparse closing beat
-- citations and footnotes: short, exact, and visibly secondary
-
-Density is structural: conclusion + explanation chain + evidence/example + implication + boundary. Do not confuse breathing room with emptiness. A page with a sentence plus a few unlabeled boxes is under-taught even when it is technically legible. Equally, copied paragraphs in tiny type are not structured density. Use `visual-page-teaching-contract.md` to record and review teaching units.
+Default to consulting/research-report density, but do not use character quotas as a pass condition. Density is structural: conclusion + explanation chain + evidence/example + implication + boundary, rendered at readable sizes. Do not confuse breathing room with an unused lower half of the page. A page with a sentence plus a few unlabeled boxes is under-taught even when technically legible; copied paragraphs in tiny type fail for the opposite reason.
 
 Split only when the page contains more than one major message or cannot remain legible. Never create extra sparse pages merely to keep every slide minimal, and never solve density by shrinking typography below comfortable reading size.
 
@@ -120,7 +112,17 @@ Route every substantial visual object before asset production:
 
 Use combinations freely. There is no unified visual format: the page's teaching and evidence jobs decide the route.
 
-Every non-trivial deck must contain at least one embedded bitmap from a real Image 2 / `gpt-image-2` or other capable image-model call, and every storyboard item marked `generated` or `image-to-image` must be fulfilled. Before declaring generation unavailable, perform a real smoke-test call and inspect whether it returns a persistent local asset. Simple SVG, generic cards, and primitive shapes do not satisfy a planned generated visual. Manual fallback requires a failed real call plus explicit user approval.
+Every non-trivial deck must contain real image-model output for the teaching objects that need it, and every storyboard item marked `generated` or `image-to-image` must be fulfilled. In Codex, use the installed system `imagegen` skill first. Simple SVG, generic cards, CSS/Canvas/Pillow drawings, and primitive shapes do not satisfy a planned generated visual. A transport retry is allowed; a model/provider downgrade or manual fallback requires user approval.
+
+Use this routing table:
+
+- quantitative data: native editable charts
+- exact table or formula: deterministic editable layout
+- simple sequence: native editable slide shapes
+- complex relationship/network: Graphviz
+- sketch-like causal explanation: Excalidraw
+- abstract concept, scene, or high-aesthetic educational diagram: ImageGen
+- original experimental evidence: tightly cropped, enlarged, or split source object
 
 ## Granularity Tests
 

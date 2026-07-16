@@ -192,6 +192,83 @@ class AuditContractTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(any("direct-output capability" in blocker for blocker in payload["blockers"]))
 
+    def test_html_generated_visual_contract_is_provider_neutral(self) -> None:
+        source = (ROOT / "scripts" / "audit_learning_site.py").read_text(encoding="utf-8")
+        self.assertNotIn("must record Image 2/gpt-image-2 provenance", source)
+        self.assertIn('for provenance_field in ("provider", "tool", "request_id")', source)
+        self.assertIn("must record the actual model_name", source)
+
+    def test_ppt_html_generated_asset_receipt_binding(self) -> None:
+        provenance = load_module("generation_provenance", ROOT / "scripts" / "generation_provenance.py")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw = root / "raw" / "model-outputs" / "visual.png"
+            receipt = root / "raw" / "receipts" / "visual.json"
+            response = root / "raw" / "provider-responses" / "visual.json"
+            final = root / "assets" / "visuals" / "visual.png"
+            for path in (raw, receipt, response, final):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            raw.write_bytes(b"real-image-model-output")
+            final.write_bytes(raw.read_bytes())
+            output_hash = provenance.file_sha256(raw)
+            prompt_hash = "a" * 64
+            receipt.write_text(json.dumps({
+                "provider": "codex",
+                "tool": "image_gen",
+                "model": "runtime-model",
+                "request_id": "req-1",
+                "prompt_sha256": prompt_hash,
+                "output_sha256": output_hash,
+            }), encoding="utf-8")
+            response.write_text(json.dumps({
+                "request_id": "req-1",
+                "model": "runtime-model",
+                "output_sha256": output_hash,
+            }), encoding="utf-8")
+            item = {
+                "model_name": "runtime-model",
+                "generation_provenance": {
+                    "provider": "codex",
+                    "tool": "image_gen",
+                    "model": "runtime-model",
+                    "request_id": "req-1",
+                    "prompt_sha256": prompt_hash,
+                    "run_receipt_path": "raw/receipts/visual.json",
+                    "run_receipt_sha256": provenance.file_sha256(receipt),
+                    "provider_response_path": "raw/provider-responses/visual.json",
+                    "provider_response_sha256": provenance.file_sha256(response),
+                    "raw_output_path": "raw/model-outputs/visual.png",
+                    "raw_output_sha256": output_hash,
+                },
+            }
+            self.assertEqual(provenance.validate_generated_asset_provenance(item, final, root), [])
+            final.write_bytes(b"manual-replacement")
+            issues = provenance.validate_generated_asset_provenance(item, final, root)
+            self.assertTrue(any("byte-match" in issue for issue in issues))
+
+    def test_strict_html_requires_two_round_qa_report(self) -> None:
+        audit = load_module("audit_learning_site_qa", ROOT / "scripts" / "audit_learning_site.py")
+        self.assertTrue(audit.audit_qa_report(None, strict=True))
+        one_round = {
+            "strict_audit_status": "passed",
+            "review_rounds": [{"round": 1, "lenses": "visual teaching novice factual technical"}],
+        }
+        issues = audit.audit_qa_report(one_round, strict=True)
+        self.assertTrue(any("at least two" in issue for issue in issues))
+        two_rounds = {
+            "strict_audit_status": "passed",
+            "review_rounds": [
+                {"round": 1, "lenses": "visual teaching novice factual technical"},
+                {"round": 2, "lenses": "visual teaching novice factual technical"},
+            ],
+        }
+        self.assertEqual(audit.audit_qa_report(two_rounds, strict=True), [])
+
+    def test_html_chinese_language_detection_accepts_zh_variants(self) -> None:
+        source = (ROOT / "scripts" / "audit_learning_site.py").read_text(encoding="utf-8")
+        self.assertIn('source_language_hint.startswith("zh")', source)
+        self.assertIn("totals alone cannot prove complete coverage", source)
+
     def test_visual_audit_reports_null_argument_lists_without_crashing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

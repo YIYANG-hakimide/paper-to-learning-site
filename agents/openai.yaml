@@ -1,4 +1,4 @@
 interface:
   display_name: "Paper and Book to Visual Learning"
-  short_description: "Turn papers and books into visual lessons"
-  default_prompt: "Use $paper-and-book-to-visual-learning to turn this long-form source into either a native generated self-study album, a dense presentation report delivered as PPTX plus PDF, or an interactive bilingual HTML reader."
+  short_description: "把论文和书籍变成视觉学习产品"
+  default_prompt: "Use $paper-and-book-to-visual-learning to turn this source into a model-generated learning album, an editable consulting-style PPTX plus PDF, or an interactive bilingual HTML reader. In Codex, use the system imagegen skill whenever explanatory images are required."

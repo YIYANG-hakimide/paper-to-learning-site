@@ -1,10 +1,10 @@
-# Image 2 Diagram Guidance
+# Model-Generated Diagram Guidance
 
 ## Use images as teaching tools
 
-Use Image 2 or the best available real image-generation model to create visuals that reduce cognitive load. Generated teaching images are the complete final pages in image-series mode, a mandatory and major visual layer in every non-trivial PPT, and an in-context teaching aid in HTML mode.
+Use a real image-generation model to create visuals that reduce cognitive load. In Codex, always start with the installed system `imagegen` skill and let the current runtime choose its preferred model; learn the actual model name from the receipt. Generated teaching images are the complete final pages in image-series mode, a major visual layer in non-trivial PPTs, and an in-context teaching aid in HTML mode.
 
-Do not silently replace generated teaching images with hand-written SVG diagrams. If Image 2 appears unavailable, first perform the real smoke test required by `image-model-routing.md`, then use another configured image model that returns local raster assets. In image-series mode, stop and ask the user to connect another image model or choose another output mode when no capable route exists. Manual fallback is only available for PPT/HTML after a real failed call and explicit approval.
+Do not silently replace generated teaching images with hand-written SVG, CSS, Canvas, Pillow, or manually assembled diagrams. If the built-in Codex route fails, follow `image-model-routing.md`: retry transport failures, then ask before switching to CLI/API or another model/provider. Outside Codex, use another configured image model only after the route is verified. Image-series mode stops when no capable route exists; PPT/HTML manual fallback still requires a real failed call and explicit approval.
 
 Do not treat an Image 2 chat preview as a delivered asset. A generated teaching image counts only after a real bitmap file is available inside the selected output package and referenced by its mode-specific manifest. PPT/HTML images must also be embedded in the rendered page; image-series assets are themselves the final pages.
 

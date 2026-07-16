@@ -13,6 +13,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import resolve_image_route
+
 
 def dependency_root() -> Path:
     return Path.home() / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies"
@@ -144,6 +150,26 @@ def skill_status(name: str) -> dict[str, object]:
     return status(False, "not installed in common skill directories")
 
 
+def presentations_status() -> dict[str, object]:
+    roots = [
+        Path.home() / ".codex" / "plugins" / "cache" / "openai-primary-runtime" / "presentations",
+        Path.home() / ".codex" / "skills" / "presentations",
+        Path.home() / ".agents" / "skills" / "presentations",
+    ]
+    candidates: list[Path] = []
+    for root in roots:
+        if root.is_file() and root.name == "SKILL.md":
+            candidates.append(root)
+        elif root.exists():
+            candidates.extend(root.glob("*/skills/presentations/SKILL.md"))
+            candidates.extend(root.glob("SKILL.md"))
+    for candidate in sorted(candidates, reverse=True):
+        artifact_tool = candidate.parent / "artifact_tool"
+        if candidate.exists() and artifact_tool.exists():
+            return status(True, str(candidate))
+    return status(False, "official Presentations skill with artifact_tool not found")
+
+
 def validate_source(source: str | None) -> tuple[dict[str, object] | None, list[str]]:
     if not source:
         return None, []
@@ -260,7 +286,17 @@ def main() -> int:
     parser.add_argument("--source", help="Optional PDF/article path to validate before extraction")
     parser.add_argument("--mode", choices=("image-series", "presentation-pdf", "interactive-html"), default="interactive-html")
     parser.add_argument("--deploy", action="store_true", help="Check deployment tooling when HTML deployment is requested")
-    parser.add_argument("--confirm-image-direct-output", action="store_true", help="Confirm the current image route can save untouched full-page model outputs and receipts")
+    parser.add_argument(
+        "--image-route-receipt",
+        "--image-receipt",
+        dest="image_route_receipt",
+        action="append",
+        default=[],
+        help="Receipt from a real image-generation smoke test; repeatable",
+    )
+    parser.add_argument("--image-route-journal", help="Route journal containing the matching real smoke-test event")
+    parser.add_argument("--image-runtime", choices=("auto", "codex", "external"), default="auto")
+    parser.add_argument("--confirm-image-direct-output", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     pdfplumber_ok, pdfplumber_python = python_module("pdfplumber")
@@ -295,7 +331,27 @@ def main() -> int:
         "frontend_slides_skill": skill_status("frontend-slides"),
         "guizang_material_skill": skill_status("guizang-material-illustration"),
         "imagegen_skill": skill_status("imagegen"),
+        "presentations_skill": presentations_status(),
     }
+
+    image_generation_required = args.mode in {"image-series", "presentation-pdf", "interactive-html"}
+    image_route_report = (
+        resolve_image_route.resolve_image_route(
+            [Path(value) for value in args.image_route_receipt],
+            Path(args.image_route_journal).expanduser() if args.image_route_journal else None,
+            runtime=args.image_runtime,
+        )
+        if image_generation_required
+        else {
+            "status": "not-required",
+            "runtime": resolve_image_route.detect_runtime(args.image_runtime),
+            "selected_route": None,
+            "verified_routes": [],
+            "candidates": [],
+            "issues": [],
+            "retry_policy": {"status": "not-required"},
+        }
+    )
 
     routes = {
         "pdf_text": checks["pdftotext"]["ok"] or checks["python_pdfplumber"]["ok"] or checks["python_pypdf"]["ok"],
@@ -303,8 +359,8 @@ def main() -> int:
         "image_processing": checks["python_pillow"]["ok"] or checks["sips"]["ok"] or checks["imagemagick"]["ok"],
         "actual_ocr": checks["tesseract"]["ok"] or (sys.platform == "darwin" and checks["swift"]["ok"]),
         "album_pdf_export": (checks["python_reportlab"]["ok"] or checks["python_pillow"]["ok"]) if args.mode == "image-series" else "not-required",
-        "image_generation": "manual_check_required",
-        "visual_deck_layout": checks["frontend_slides_skill"]["ok"] or "built-in fixed-stage fallback",
+        "image_generation": image_route_report["status"],
+        "visual_deck_layout": checks["presentations_skill"]["ok"],
         "illustration_prompting": checks["guizang_material_skill"]["ok"] or "built-in paper-specific prompting",
         "deck_export": checks["playwright_browser"]["ok"] if args.mode == "presentation-pdf" else "not-required",
         "browser_qa": checks["playwright_browser"]["ok"] if browser_required else "not-required",
@@ -322,14 +378,36 @@ def main() -> int:
         blockers.append("No PDF figure rendering route found: install/use pdftoppm or another reliable renderer.")
     if browser_required and not routes["browser_qa"]:
         blockers.append("No browser QA route found: install Playwright or use system Chrome.")
-    if args.mode in {"image-series", "presentation-pdf"} and not routes["actual_ocr"]:
+    if image_generation_required and not routes["actual_ocr"]:
         blockers.append("No executable OCR route found for final visual verification: install Tesseract or use macOS Swift/Vision.")
     if args.mode == "image-series" and not routes["album_pdf_export"]:
         blockers.append("No album PDF export route found: install reportlab or Pillow.")
-    if args.mode == "image-series" and not args.confirm_image_direct_output:
-        blockers.append("Image-series direct-output capability has not been confirmed. Verify the image model can save untouched full-page rasters and run receipts, then rerun with --confirm-image-direct-output.")
+    if image_generation_required and args.confirm_image_direct_output:
+        blockers.append("Self-confirmation via --confirm-image-direct-output is prohibited and cannot verify an image route. Provide a real --image-route-receipt and --image-route-journal instead.")
+    if image_generation_required and image_route_report["status"] != "ready":
+        route_status = image_route_report["status"]
+        runtime = image_route_report["runtime"]
+        if route_status == "blocked_waiting_user":
+            if image_route_report.get("block_reason") == "external_fallback_requires_user_confirmation":
+                blockers.append("blocked_waiting_user: Codex built-in imagegen failed or only an external route is verified. Ask the user to explicitly confirm the CLI/API fallback before using it.")
+            else:
+                blockers.append("blocked_waiting_user: image generation had three consecutive HTTP 504 transport failures and about eight minutes without success. Stop retrying and ask the user before changing provider/model or configuration.")
+        elif route_status == "transport_cooldown":
+            wait_seconds = image_route_report.get("retry_policy", {}).get("retry_after_seconds", 0)
+            blockers.append(f"Image transport reached the three-attempt HTTP 504 cap. Do not retry or downgrade the model/provider; remain in transport cooldown for about {wait_seconds} more seconds.")
+        elif route_status == "transport_retry_scheduled":
+            wait_seconds = image_route_report.get("retry_policy", {}).get("retry_after_seconds", 0)
+            blockers.append(f"Image transport retry is backing off for {wait_seconds} more seconds. Keep the same model/provider; a transport switch is not a model downgrade.")
+        elif route_status == "needs_user_configuration":
+            blockers.append("No usable external image-generation tool/API configuration was detected. Ask the user to configure a supported CLI or API credential, then run a real smoke test and record its receipt and route journal.")
+        elif runtime == "codex":
+            blockers.append("Image-generation direct-output capability is unverified. Use the preferred built-in imagegen route for a real smoke test, then provide its local raster receipt and route journal; self-confirmation is not accepted.")
+        else:
+            blockers.append("Image generation is not verified. Run a real smoke test with the detected external tool/API and provide its local raster receipt plus route journal.")
     if args.mode == "presentation-pdf" and not routes["deck_export"]:
         blockers.append("No browser route found for presentation PDF export.")
+    if args.mode == "presentation-pdf" and not routes["visual_deck_layout"]:
+        blockers.append("The official Presentations skill and editable artifact-tool engine are unavailable. Configure an equivalent editable PPT engine or choose the learning-album mode.")
     if args.mode == "presentation-pdf" and not checks["pdftotext"]["ok"]:
         blockers.append("pdftotext is required to scan final PDF copy and language quality.")
     if args.deploy and args.mode == "interactive-html" and not routes["vercel_deploy"]:
@@ -340,6 +418,7 @@ def main() -> int:
         "checks": checks,
         "mode": args.mode,
         "routes": routes,
+        "image_route": image_route_report,
         "source": source_report,
         "recommended_commands": {
             "python": recommended_python,
@@ -348,9 +427,9 @@ def main() -> int:
             "browser_qa_driver": checks["playwright_browser"]["detail"] or checks["chrome_headless"]["detail"],
         },
         "manual_checks": {
-            "image_generation": "Verify the current Codex tool list includes Image 2 or another image generation tool before promising generated teaching diagrams.",
-            "image_asset_export": "Verify that a PNG/JPG/WebP can be saved into the selected mode's local asset directory. A chat-only preview is not a deliverable asset.",
-            "image_series_direct_output": "For image-series mode, verify the model can generate the complete Chinese infographic as one untouched raster file and that a run receipt plus raw output hash can be preserved. Post-composed pages are not allowed."
+            "image_generation": "In Codex, call the built-in imagegen route first. Outside Codex, detect a configured tool/API and ask the user to configure one when none is available. Availability is proven only by a real receipt plus route journal.",
+            "image_asset_export": "The receipt must bind a PNG/JPG/WebP local asset to its SHA-256. A chat-only preview or a --confirm flag is not evidence.",
+            "image_series_direct_output": "For image-series mode, the verified model must generate the complete Chinese infographic as one untouched raster file. Preserve the real receipt and route journal; post-composed pages are not allowed."
         },
         "blockers": blockers,
     }

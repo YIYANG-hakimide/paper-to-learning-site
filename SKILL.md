@@ -9,8 +9,8 @@ description: "Turn papers, books, chapters, articles, research reports, white pa
 
 Turn a difficult long-form source into a coherent visual lesson for a college student with no professional background. Papers remain a primary use case, but the source may also be a book, chapter, article, report, white paper, manual, or another substantial text. Ask which final form the user needs, then build only that primary output:
 
-1. **图片 / Image series**: an ordered set of high-information explainer images.
-2. **PPT / Presentation report**: a dense 16:9 deck for explaining the source to other people, delivered as PDF plus editable PPTX.
+1. **学习图册 / Image album**: an ordered set of high-information, model-generated explainer images for self-study.
+2. **PPT / Presentation report**: a dense, editable 16:9 consulting-style report for presenting and later reading, delivered as PPTX plus PDF.
 3. **HTML / Interactive site**: an interactive, bilingual or Chinese guided reader that can be deployed.
 
 All three modes share the same teaching logic, source fidelity, evidence rules, and source-specific visual direction. Image series is optimized for personal study; PPT is optimized for presenting and discussing with others; HTML is optimized for interactive close reading. They differ in information density, composition, interaction, export, and QA.
@@ -19,7 +19,10 @@ All three modes share the same teaching logic, source fidelity, evidence rules, 
 
 Ask all unresolved questions in one compact message. Do not spread intake across several turns. The output mode is mandatory unless the user's request already names it; after the mode is known, the user may answer `其余全部默认` and begin immediately.
 
-1. 最终需要：`图片（个人学习图册）`、`PPT（对外讲述，默认 PDF + 可编辑 PPTX）`、还是 `HTML`？
+1. 最终需要哪一种？
+   - `学习图册`：信息密度最高，适合自己学习；每页是生图模型直接生成的完整讲解图，并附顺序一致的 PDF。
+   - `PPT`：可编辑，适合讲述、汇报和分享；默认交付 PPTX + PDF，信息密度接近演示型咨询报告。
+   - `HTML`：可交互、可扩展，适合逐段精读、双语对照和继续补充。
 2. 是否有想重点探讨、重点解释、或者希望读者特别关注的内容？
 3. 默认按“无专业背景大学生”的认知水平解释，可以吗？
 4. 图片/PPT 规模：`精简`、`中等`、`详细`、还是 `自动判断`？
@@ -31,11 +34,11 @@ Default unresolved values are: no special focus, non-specialist college reader, 
 
 ## Output Modes
 
-### Image Series
+### Image Album
 
 Create a logically ordered album of native generated infographics. This mode is not a portrait PPT, not a template wrapped around illustrations, and not a folder of unrelated pictures.
 
-- Every final bitmap must be the direct full-frame output of Image 2 / `gpt-image-2` or another real image model. Do not add titles, labels, cards, footers, source crops, or explanatory text with HTML, SVG, Pillow, Canvas, Photoshop, or another compositor afterward.
+- Every final bitmap must be the direct full-frame output of a real image model. In Codex, use the built-in system `imagegen` skill first and let it choose the current preferred model. Do not add titles, labels, cards, footers, source crops, or explanatory text with HTML, SVG, Pillow, Canvas, Photoshop, or another compositor afterward.
 - When text, facts, or layout are wrong, regenerate the complete image with the image model. Do not repair the page with deterministic overlays. Cropping, padding, screenshotting, and template framing do not turn an illustration into a valid final infographic.
 - Every image has a clear Chinese title and enough native in-image explanation to stand alone. Canonical English terms may appear as short aliases.
 - Keep one coherent art direction across the album while varying the teaching form: argument map, knowledge map, mechanism diagram, system architecture, experiment flow, causal chain, scene explanation, comparison, or text-led infographic.
@@ -44,21 +47,23 @@ Create a logically ordered album of native generated infographics. This mode is 
 - Use the aspect ratio that best fits the teaching job; keep the album visually coherent even when a justified diagram needs another ratio.
 - Deliver only the numbered high-resolution PNG/JPEG/WebP sequence and a page-matched album PDF as user-facing artifacts. Keep contact sheets, storyboard, manifest, prompts, and QA records internal.
 
-### PPT / Presentation PDF
+### PPT / Presentation Report
 
-Create a 16:9 presentation report for explaining the source to other people. It must work during a live presentation and remain understandable when read afterward. Deliver both PDF and editable `.pptx` by default. An internal HTML stage may be used for exact layout and export, but it is not the requested final product.
+Create a 16:9 presentation report for explaining the source to other people. It must work during a live presentation and remain understandable when read afterward. Deliver both PDF and editable `.pptx` by default.
 
-- Use fixed 1920x1080 pages with consulting/research-report information density, readable hierarchy, and page-specific composition.
+- Use the current official `Presentations` skill and its editable presentation engine. In Codex, read the installed Presentations skill before authoring and use its required artifact-tool workflow. Do not use screenshot-only decks, `python-pptx`, or a stack of flattened full-slide images as the editable PPTX.
+- Use fixed 16:9 pages with consulting/research-report information density, readable hierarchy, and page-specific composition.
 - The opening pages must explain what the source examines, why it matters, its answer or central ideas, and how the full reasoning unfolds. Combine overview and argument map when the source is simple; split them when needed.
 - Teach the minimum prerequisite knowledge before it is used, then explain remaining terms at their first point of need.
-- Organize each page around one conclusion-led message, but do not mistake one message for one sentence. A normal teaching page should combine the conclusion, 3-7 structured information groups, an explanation chain, evidence/example, implication, and relevant boundary.
-- Treat character counts only as a diagnostic: overview and concept pages normally carry 350-650 Chinese characters; evidence, comparison, and close-reading pages normally carry 450-900, excluding text already legible inside charts/tables. Use fewer words only when a large visual or source object does equivalent teaching work.
+- Organize each page around one conclusion-led message, but do not mistake one message for one sentence. A normal teaching page should combine the conclusion, structured explanation, evidence/example, implication, and relevant boundary. Judge completeness from the rendered page, not from a mechanical character quota.
 - Before layout, create a page-level visual inventory and route each object to generated visual, image-to-image reinterpretation, deterministic diagram/chart/table/formula, or faithful source crop. Use all routes when the source needs them; there is no single required format.
-- For every non-trivial PPT, make at least one real call to Image 2 / `gpt-image-2` or another capable image model and embed the returned bitmap. Generate every planned concept, mechanism, architecture, scene, abstract process, and worked-example visual for which generation is the best route. Do not silently replace these assets with simple SVG, generic cards, or primitive shapes.
-- Run a real image-generation smoke test before declaring the route unavailable. A manual SVG/CSS fallback for a planned generated visual is allowed only after the real call fails and the user explicitly approves the fallback.
+- For every non-trivial PPT, make real image-model calls for the concepts, mechanisms, architectures, scenes, abstract processes, and worked examples that benefit from illustrative explanation. In Codex, the first route is the system `imagegen` skill. Do not silently replace planned generated visuals with generic cards, simple shapes, CSS, SVG, Canvas, or Pillow drawings.
+- Route exact data to native editable charts, exact tables/formulas to deterministic layout, simple flows to native editable slide shapes, complex networks to Graphviz, sketch-like explanations to Excalidraw, abstract/high-aesthetic explanations to ImageGen, and original evidence to tightly cropped or enlarged source objects.
 - Inventory important source figures/tables. Show, crop, split, enlarge, annotate, or faithfully redraw the important ones. Explain what is tested, how to read the axes/panels, the baseline, metric, result, supported conclusion, and relevant limitation.
 - Avoid both empty keynote pages and unstructured document dumps. Density must come from structured reasoning and evidence, not tiny type or copied paragraphs. Split only when the page has more than one major message or cannot stay readable.
-- Export and verify both PPTX and PDF: page order, crop, font rendering, Chinese readability, figure legibility, editable-object integrity where practical, and representative dense pages.
+- Export and verify both PPTX and PDF: page order, crop, font rendering, Chinese readability, figure legibility, and editable title/body/chart/table/shape integrity. Render a contact sheet plus every full-size page and compare PPTX/PDF outputs.
+- About 20 pages should use at least six genuinely different composition families; a similar structure must not repeat more than twice in sequence. At least 70% of teaching pages need a meaningful visual object, and ordinary pages should not be dominated by raw source screenshots.
+- After at least two repair rounds, if the PPT still fails the strict visual, narrative, editability, or rendering gate, do not deliver the bad deck. Ask whether the user wants another PPT repair round or a newly generated learning album; never switch modes silently or rename slide screenshots as an album.
 
 ### HTML / Interactive Site
 
@@ -77,8 +82,8 @@ Create the guided interactive reader originally developed by this skill.
 ## Size Modes For Images And PPT
 
 - **Concise**: normally 6-10 images/pages. Preserve the problem, essential prerequisite, core method, strongest evidence, conclusion, and limitation. State that secondary detail is omitted.
-- **Medium**: 11-20 images/pages. Typical for ordinary papers after automatic sizing; include prerequisites, method steps, a worked example when useful, major evidence, and limitations.
-- **Detailed**: 21 or more images/pages. Use for long or concept-heavy papers, full teaching, multiple experiments, or explicit user focus. Avoid exceeding 36 without a clear reason or user approval.
+- **Medium**: 11-20 images/pages. Typical for ordinary sources after automatic sizing; include prerequisites, method or argument steps, a worked example when useful, major evidence, and limitations.
+- **Detailed**: 21-36 images/pages. Use for long or concept-heavy sources, full teaching, multiple evidence sections, or explicit user focus. Exceed 36 only with a clear reason and user approval.
 - **Automatic**: calculate from main-text length, hard concepts, method complexity, figures/tables, and requested focus. See `references/output-modes-and-sizing.md`.
 
 Do not hit a target count by adding filler. Do not compress required logic into tiny text merely to stay under the count. If the selected count cannot responsibly cover the user's focus, explain the tradeoff and prioritize the requested scope.
@@ -86,6 +91,9 @@ Do not hit a target count by adding filler. Do not compress required logic into 
 ## Non-Negotiables
 
 - Run source/tool preflight before extraction or generation.
+- When any teaching visual is required, call a real image-generation model. Never describe a hand-drawn SVG, CSS composition, Canvas/Pillow output, or manually assembled diagram as model-generated.
+- Detect the runtime before choosing an image route. In Codex, always read and use the installed system `imagegen` skill at `$CODEX_HOME/skills/.system/imagegen/SKILL.md` first. If the built-in route fails, distinguish a transport retry from a model/provider downgrade; never silently skip generation or switch to an older model.
+- Outside Codex, inspect available image tools and configured APIs. If none exists, ask the user to configure one before image-dependent work. If several providers/models exist and no clear current default is available, ask which route to use.
 - Identify the source type and requested scope before extraction. For full books or very long collections, confirm whole-source versus selected-volume/chapter scope and create a volume/chunk plan before compressing content.
 - Extract and inventory the complete in-scope source before selecting content.
 - Organize by learner questions and causal/argument logic, not mechanically by the source table of contents.
@@ -132,6 +140,7 @@ Read by selected mode:
 
 - Images: `references/image-series-quality-gate.md`
 - PPT: `references/deck-design-quality-gate.md`, `references/deck-qa-checklist.md`, `references/implementation-and-deploy.md`
+- PPT also always reads `references/presentation-production.md` before authoring.
 - HTML: `references/design-quality-gate.md`, `references/reader-interactions.md`, `references/reader-runtime-contract.md`, `references/layout-and-visual-patterns.md`, `references/qa-checklist.md`, `references/implementation-and-deploy.md`
 - HTML also always reads `references/learning-site-ux-principles.md`.
 
@@ -139,7 +148,7 @@ Read by selected mode:
 
 ### 1. Preflight And Extract Once
 
-1. Inspect the available image tool first when image-series or PPT mode is selected, then run `scripts/preflight_learning_site.py --source <source-file> --mode <image-series|presentation-pdf|interactive-html>`. Add `--confirm-image-direct-output` only after confirming untouched raster export plus receipts, and add `--deploy` only when HTML deployment is requested.
+1. Inspect the runtime and available image/deck tools first. When image album or PPT mode is selected, resolve and record a real image route with `scripts/resolve_image_route.py`; then run `scripts/preflight_learning_site.py --source <source-file> --mode <image-series|presentation-pdf|interactive-html> --image-route-receipt <receipt.json> --image-route-journal <journal.json>`. A command-line flag must never be accepted as proof that generation worked. Add `--deploy` only when HTML deployment is requested.
 2. Stop on unreadable, truncated, or heavily unextractable sources.
 3. Create a source-hash cache and reuse extraction, page renders, crops, terms, claims, and evidence inventory across retries or output modes.
 4. Extract stable source ids, pages, order, snippets/hashes, figures, tables, formulas, hard concepts, prerequisites, and likely misconceptions.
@@ -174,7 +183,7 @@ Read by selected mode:
 ### 5. Validate By Mode
 
 - Images: export the page-matched album PDF, run `scripts/audit_visual_series.py <output-dir> --source <paper.pdf> --strict --require-pdf`; verify direct model provenance, inspect every final image, the full contact sheet, and the PDF.
-- PPT: build and inspect the editable deck, export PDF, verify the generated-visual receipts and page-density diagnostics, then run the canonical final command `scripts/audit_learning_deck.py <work-dir-or-index.html> --source <source-file> --strict --require-pdf`.
+- PPT: build with the official Presentations workflow, inspect the editable deck, export PDF, verify generated-visual receipts, real layout variety, page utilization, evidence balance, and editable objects, then run the canonical final command `scripts/audit_learning_deck.py <work-dir-or-index.html> --source <source-file> --strict --require-pdf`.
 - HTML: run `scripts/audit_learning_site.py <site-dir-or-index.html> --strict`; test desktop/mobile interactions and source coverage.
 - For every mode, run structural checks first, then at least two review/fix rounds covering visual design, teaching logic, novice comprehension, factual fidelity, information completeness, public-copy quality, and technical rendering. Record concrete fixes in `qa/qa-report.json`.
 - Use `references/mode-acceptance.md` as the final routing gate. A different mode's successful audit never counts.
@@ -199,4 +208,4 @@ State clearly what was selected and return only the relevant primary artifact:
 - PPT: final PDF, editable `.pptx`, and page count.
 - HTML: local `index.html` and deployed URL when requested.
 
-For images/PPT, report the selected and resolved size mode plus actual count. For HTML, report complete/curated scope and source coverage. For every mode, report the image model used, strict audit result, and any intentionally omitted scope.
+For images/PPT, report the selected and resolved size mode plus actual count. For HTML, report complete/curated scope and source coverage. For every mode, report the actual image tool/provider/model used, strict audit result, and any intentionally omitted scope. Never claim a model name that is not present in a real generation receipt.

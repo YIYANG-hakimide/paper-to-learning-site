@@ -24,7 +24,8 @@
 
 - [ ] Most teaching slides contain a substantial visual, source evidence object, or formula/example breakdown.
 - [ ] Every major concept that benefits from spatial or causal explanation has a generated teaching visual.
-- [ ] A real Image 2 / `gpt-image-2` or other capable image-model smoke test was called and its saved bitmap/receipt was recorded before route availability was judged.
+- [ ] A real image-model smoke test was called through the verified route; in Codex this starts with the system `imagegen` skill, and the actual model comes from the receipt rather than a hardcoded name.
+- [ ] Every final generated bitmap byte-matches its recorded raw model output and is bound to a real receipt, request id, prompt hash, provider response, and asset hash.
 - [ ] Every non-trivial deck embeds at least one real generated bitmap, and every storyboard item routed to `generated` or `image-to-image` is fulfilled by a real generated asset.
 - [ ] No planned generated visual was silently replaced by simple SVG, generic cards, primitive shapes, or a false manifest entry.
 - [ ] Generated visuals are local raster assets and use the recorded real model.
@@ -38,6 +39,8 @@
 - [ ] Diagram labels, callouts, and visual meanings were planned before generation; a generic caption does not carry the whole explanation.
 - [ ] Every generated visual records `display_width_px`, `display_height_px`, `crop_checked`, `reviewer_status`, and regeneration reason when it failed.
 - [ ] Primary visuals occupy a substantial slide area; dense evidence is at least 1100px wide on stage or has a dedicated split/zoom slide.
+- [ ] Browser geometry confirms that at least 70% of body slides contain an effective visual object; decorative thumbnails, empty wrappers, and manifest-only claims were excluded.
+- [ ] On ordinary teaching pages, source screenshot area is no more than 40% of the stage; larger source facsimiles use a dedicated evidence close-reading page.
 
 ## Evidence
 
@@ -63,13 +66,15 @@
 - [ ] Motion supports pacing and respects `prefers-reduced-motion`.
 - [ ] Public slides contain no prompt, manifest, QA, reader-level, asset, or internal-review language.
 - [ ] The first slide and first content slide feel paper-specific, not templated.
-- [ ] Slide `layout_family` distribution was checked; one repeated composition does not dominate without a paper-specific reason.
+- [ ] Rendered geometry, not only `layout_family`, was clustered; a 20-page deck has at least six real layouts and no same/similar structure runs longer than two teaching pages.
 - [ ] Storyboard order, manifest slide order, HTML order, PNG export order, and PDF order match.
 - [ ] Each page has an obvious focal point and scan order.
 - [ ] Every teaching page was reviewed without narration and remains understandable on its own.
 - [ ] Section beats and evidence-dense pages form a deliberate reading rhythm without empty agenda filler.
-- [ ] Report-level information density was checked; low-density pages are rare and justified.
-- [ ] Each page records `text_character_count`, `information_group_count`, and `visual_route`; representative overview/concept and evidence/comparison pages meet the structural-density rule or have a specific visual-equivalence reason.
+- [ ] Report-level completeness was checked from claim/question, reasoning, evidence/example, implication, and boundary; there is no mechanical 350-900 character quota.
+- [ ] Browser geometry and screenshot pixels confirm meaningful canvas use; normal body pages do not leave the lower half substantially blank.
+- [ ] PPTX OOXML geometry independently confirms layout-family count, consecutive similarity, visual/image area, and lower-half use; oversized one-line body boxes are rejected rather than counted as filled canvas.
+- [ ] Each page records structural information groups and visual route, while final acceptance uses browser-visible groups, font size, canvas utilization, and effective visual evidence rather than manifest character counts.
 - [ ] Laptop reading and full-page PDF legibility were checked.
 - [ ] Public copy passed `public-copy-style.md`, including internal-process leakage, repeated contrast syntax, empty conclusions, and template repetition.
 
@@ -77,7 +82,7 @@
 
 - [ ] All local images load with no broken paths.
 - [ ] PNG export preserves the complete stage and fonts.
-- [ ] Editable PPTX and PDF exports both preserve page order, crop, fonts, text legibility, and visual placement; editable-object integrity was checked where practical.
+- [ ] Editable PPTX and PDF exports both preserve page order, crop, fonts, text legibility, and visual placement; PPTX OOXML confirms that slide 1 has separate visible editable title and body/subtitle text shapes.
 - [ ] At least the title, one image-led slide, one evidence slide, and one dense slide were inspected after export.
 - [ ] Every source crop is readable at final display size or has been split, zoomed, or redrawn.
 - [ ] Vercel deployment is verified only after local QA passes.

@@ -25,12 +25,13 @@ Final names should preserve order, such as `001-problem.png`, `002-prerequisite.
 
 ```text
 learn-paper-presentation/
-  index.html               # internal fixed-stage source
+  deck.mjs                 # editable artifact-tool source
   assets/visuals/
   assets/evidence/
   assets/exports/
     pages/                 # optional numbered PNGs
-    learn-paper.pdf        # primary deliverable
+    learn-paper.pptx       # editable primary deliverable
+    learn-paper.pdf        # matched reading/export copy
   data/source-inventory.json
   data/storyboard.json
   data/learning-deck-manifest.json
@@ -79,15 +80,17 @@ Use `manifest_schema_version: "0.5"` for image-series and presentation manifests
 - Export the album PDF and run `audit_visual_series.py <output-dir> --source <paper.pdf> --strict --require-pdf` before delivery.
 - Use `scripts/build_image_album_pdf.py assets/images assets/exports/learn-paper-album.pdf` for the standard one-image-per-page export.
 
-## Presentation Stage
+## Presentation Production
 
-- Author every page at 1920x1080.
-- Scale uniformly; do not responsive-reflow page contents.
-- Use the internal HTML stage to ensure exact typography, citations, formulas, charts, and image placement.
-- Use self-reading consulting-report density rather than speaker-deck pacing.
-- Export pages with Playwright or another reliable browser renderer.
+- In Codex, read the current official `Presentations` skill and use its `@oai/artifact-tool` workflow. Outside Codex, require an equivalent editable presentation engine.
+- Author every page at 16:9 and keep titles, body copy, charts, tables, shapes, and layout objects editable. Generated explanatory images may remain high-resolution bitmaps.
+- Do not use a PDF-to-slide conversion, screenshots of HTML pages, or one flattened image per slide as the PPTX implementation.
+- Use a self-reading consulting-report rhythm: page-specific layouts, conclusion-led titles, visible evidence, and enough explanation to work without narration.
+- Route visuals deliberately: native charts for data, native shapes for simple flows, deterministic typesetting for exact tables/formulas, Graphviz for complex topology, Excalidraw for sketch explanations, ImageGen for abstract or high-aesthetic teaching visuals, and source crops for evidence.
+- Render every page from PPTX, export PDF, and compare page order, crops, fonts, visual placement, and editability. Contact-sheet review alone is insufficient.
 - Run `audit_learning_deck.py <work-dir> --source <paper.pdf> --strict`, export PDF, then rerun with `--source <paper.pdf> --strict --require-pdf`.
 - Inspect title, image-led, evidence-led, densest, and closing pages in the final PDF.
+- If two full repair rounds still fail strict PPT QA, stop and ask whether to continue repairing the PPT or start a separate native learning-album run. Do not switch modes automatically.
 
 ## Interactive HTML
 

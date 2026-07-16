@@ -340,12 +340,14 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
     if source_has_experiments is None:
         errors.append("Teaching inventory must record source_has_experiments.")
     elif source_has_experiments is True and not inventory.get("experiments"):
-        errors.append("Teaching inventory says the paper has experiments but experiments[] is empty.")
+        errors.append("Teaching inventory says the source has experiments but experiments[] is empty.")
     final_items = {str(item.get("id")): item for item in manifest.get("items", []) if item.get("id")}
     for concept in inventory.get("hard_concepts", []):
-        for field in ("term", "plain_label", "field_definition", "plain_explanation", "paper_specific_meaning", "author_usage", "common_misunderstanding", "definition_item_ids", "visible_definition_labels"):
+        for field in ("term", "plain_label", "field_definition", "plain_explanation", "author_usage", "common_misunderstanding", "definition_item_ids", "first_use_item_id", "visible_definition_labels"):
             if not concept.get(field):
                 errors.append(f"Hard concept {concept.get('id', '[unknown]')} is missing {field}.")
+        if not (concept.get("source_specific_meaning") or concept.get("paper_specific_meaning")):
+            errors.append(f"Hard concept {concept.get('id', '[unknown]')} is missing source_specific_meaning.")
         concept_id = str(concept.get("id", ""))
         visible_labels = {str(value) for value in concept.get("visible_definition_labels", [])}
         for item_id in concept.get("definition_item_ids", []):
@@ -356,6 +358,12 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, errors: 
                 errors.append(f"Definition item {item_id} does not declare explained_concept_ids coverage for {concept_id}.")
             elif not visible_labels.issubset({str(value) for value in item.get("expected_labels", [])}):
                 errors.append(f"Definition item {item_id} expected_labels do not expose every explanation layer for {concept_id}.")
+        ordered_ids = list(final_items)
+        first_use_id = str(concept.get("first_use_item_id", ""))
+        definition_ids = [str(value) for value in concept.get("definition_item_ids", []) if str(value) in final_items]
+        if first_use_id in final_items and definition_ids:
+            if min(ordered_ids.index(value) for value in definition_ids) > ordered_ids.index(first_use_id):
+                errors.append(f"Hard concept {concept_id} is first used before its definition/explanation item.")
     for experiment in inventory.get("experiments", []):
         for field in (
             "comparison_objects",
@@ -497,6 +505,17 @@ def main() -> int:
             for field in ("complexity_score", "score_breakdown", "target_min", "target_max", "maximum_count", "resolved_count", "rationale"):
                 if sizing.get(field) in (None, "", []):
                     errors.append(f"Automatic sizing is missing {field}.")
+            breakdown = sizing.get("score_breakdown", {})
+            if isinstance(breakdown, dict):
+                recomputed_score = sum(value for value in breakdown.values() if isinstance(value, (int, float)))
+                if sizing.get("complexity_score") != recomputed_score:
+                    errors.append(f"Automatic sizing complexity_score does not equal score_breakdown sum: {sizing.get('complexity_score')}/{recomputed_score}.")
+                expected_mode = "concise" if recomputed_score <= 7 else "medium" if recomputed_score <= 15 else "detailed"
+                if size_mode != expected_mode:
+                    errors.append(f"Automatic sizing resolves to {expected_mode} for score {recomputed_score}, not {size_mode}.")
+                expected_range = {"concise": (6, 10), "medium": (11, 20), "detailed": (21, 36)}[expected_mode]
+                if (sizing.get("target_min"), sizing.get("target_max")) != expected_range:
+                    errors.append(f"Automatic sizing target range must be {expected_range[0]}-{expected_range[1]} for {expected_mode} mode.")
         items = manifest.get("items", [])
         expected = manifest.get("items_expected")
         rendered = manifest.get("items_rendered")
@@ -603,9 +622,12 @@ def main() -> int:
                 errors.append("Experiment setup must appear before result evidence.")
 
         source_meta = manifest.get("source_fidelity", {})
-        for field in ("source_pdf_sha256", "page_count"):
-            if not source_meta.get(field):
-                errors.append(f"Source fidelity is missing {field}.")
+        source_hash = source_meta.get("source_sha256") or source_meta.get("source_pdf_sha256")
+        source_format = str(source_meta.get("source_format") or "").lower()
+        if not source_hash:
+            errors.append("Source fidelity is missing source_sha256/source_pdf_sha256.")
+        if source_format == "pdf" and not source_meta.get("page_count"):
+            errors.append("PDF source fidelity is missing page_count.")
         if not manifest.get("source_title"):
             errors.append("Manifest is missing source_title.")
         if args.source:
@@ -614,7 +636,7 @@ def main() -> int:
                 errors.append(f"Requested source does not exist: {requested_source}")
             else:
                 requested_hash = file_hash(requested_source)
-                if clean_hash(source_meta.get("source_pdf_sha256")) != requested_hash:
+                if clean_hash(source_hash) != requested_hash:
                     errors.append("P0 source identity mismatch: output manifest does not belong to the requested source file.")
                 if requested_source.suffix.lower() == ".pdf":
                     pdfinfo = command_path("pdfinfo")
@@ -630,9 +652,9 @@ def main() -> int:
         else:
             source_path = root / str(source_rel)
             source_inventory = load_json(source_path)
-            if clean_hash(source_inventory.get("source_sha256")) != clean_hash(source_meta.get("source_pdf_sha256")):
-                errors.append("Source inventory hash does not match manifest source_pdf_sha256.")
-            if source_inventory.get("page_count") != source_meta.get("page_count"):
+            if clean_hash(source_inventory.get("source_sha256")) != clean_hash(source_hash):
+                errors.append("Source inventory hash does not match manifest source hash.")
+            if source_format == "pdf" and source_inventory.get("page_count") != source_meta.get("page_count"):
                 errors.append("Source inventory page_count does not match manifest source fidelity.")
             if str(source_inventory.get("source_title", "")).strip() != str(manifest.get("source_title", "")).strip():
                 errors.append("Source inventory title does not match manifest source_title.")

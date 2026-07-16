@@ -16,6 +16,11 @@ import sys
 import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from generation_provenance import validate_generated_asset_provenance
 from urllib.parse import urlparse
 
 
@@ -367,6 +372,7 @@ def load_manifest(root: Path) -> dict[str, object] | None:
 
 def load_qa_report(root: Path) -> dict[str, object] | None:
     candidates = [
+        root / "qa" / "qa-report.json",
         root / "data" / "qa-report.json",
         root / "qa-report.json",
     ]
@@ -383,7 +389,7 @@ def load_qa_report(root: Path) -> dict[str, object] | None:
 
 def audit_qa_report(qa_report: dict[str, object] | None, strict: bool) -> list[str]:
     if not qa_report:
-        return []
+        return ["Strict HTML delivery requires qa/qa-report.json with at least two review/fix rounds."] if strict else []
     errors: list[str] = []
     qa_path = str(qa_report.get("_qa_report_path") or "qa-report.json")
     if "_qa_report_error" in qa_report:
@@ -392,8 +398,30 @@ def audit_qa_report(qa_report: dict[str, object] | None, strict: bool) -> list[s
     if not strict:
         return errors
 
+    review_entries = qa_report.get("adversarial_passes") or qa_report.get("review_rounds") or qa_report.get("rounds") or []
+    review_rounds = {
+        str(item.get("round") or item.get("id"))
+        for item in review_entries
+        if isinstance(item, dict) and (item.get("round") is not None or item.get("id") is not None)
+    }
+    if len(review_rounds) < 2:
+        errors.append(f"{qa_path}: strict HTML QA needs at least two distinct review/fix rounds")
+    review_text = json.dumps(review_entries, ensure_ascii=False).lower()
+    required_lenses = {
+        "visual": ("visual", "ui", "美观", "视觉"),
+        "teaching": ("teaching", "pedagogy", "讲解", "教学"),
+        "novice": ("novice", "beginner", "小白", "无专业背景"),
+        "factual": ("factual", "source fidelity", "事实", "原文"),
+        "technical": ("technical", "render", "interaction", "技术", "交互"),
+    }
+    for lens, tokens in required_lenses.items():
+        if not any(token in review_text for token in tokens):
+            errors.append(f"{qa_path}: review rounds do not cover the {lens} lens")
+
     status = str(qa_report.get("strict_audit_status") or qa_report.get("status") or "").strip()
-    if status and not re.fullmatch(r"(pass|passed|clean|ok|success|0[_ -]?errors?)", status, re.I):
+    if not status:
+        errors.append(f"{qa_path}: qa-report must record a final strict audit status")
+    elif not re.fullmatch(r"(pass|passed|clean|ok|success|0[_ -]?errors?)", status, re.I):
         errors.append(f"{qa_path}: qa-report records unresolved strict audit status '{status}'")
 
     remaining = qa_report.get("strict_audit_remaining_errors") or qa_report.get("remaining_errors") or qa_report.get("errors")
@@ -1640,7 +1668,7 @@ def audit_html(
     if strict and source_count < 10:
         errors.append(f"{path}: too few source reading blocks for a paper learning site ({source_count}); use --expected-source-blocks for exact checks")
     source_language_hint = str(manifest.get("source_language", "")).lower() if isinstance(manifest, dict) else ""
-    source_is_chinese = source_language_hint in {"zh", "zh-cn", "zh-hans", "chinese", "中文"}
+    source_is_chinese = source_language_hint.startswith("zh") or source_language_hint in {"chinese", "中文"}
     source_is_non_chinese = bool(source_language_hint) and not source_is_chinese
     if strict and source_is_non_chinese and not language_mode:
         errors.append(f"{path}: non-Chinese source needs a visible bilingual language mode such as 中英 / 中文 / EN only")
@@ -1684,7 +1712,7 @@ def audit_html(
                 preview = compact_text(note_text)[:80]
                 errors.append(f"{path}: figure/table explanation #{index} misses cues {', '.join(missing_cues)}: {preview}")
     if diagram_svgs:
-        message = f"{path}: generated diagram assets include SVG files under assets/diagrams; use Image 2/bitmap visuals when available: {len(diagram_svgs)} found"
+        message = f"{path}: generated diagram assets include SVG files under assets/diagrams; use verified image-model bitmap visuals when generation is required: {len(diagram_svgs)} found"
         if strict and not (manifest and manifest.get("allow_svg_fallback") is True):
             errors.append(message)
         else:
@@ -1983,7 +2011,6 @@ def audit_html(
             errors.append(f"{path}: manifest says only {rendered_figures}/{expected_figures} paper figures/tables rendered")
         if isinstance(expected_visuals, int) and isinstance(rendered_visuals, int) and rendered_visuals < expected_visuals:
             errors.append(f"{path}: manifest says only {rendered_visuals}/{expected_visuals} generated visuals rendered")
-        image2_pattern = r"image\s*2|gpt[-\s]*image[-\s]*2|gpt\s*image\s*2"
         image_generation_downgrade_pattern = (
             r"attempt(?:ed)?|fallback|manual|hand[-\s]?drawn|placeholder|"
             r"pillow|pil\b|canvas|local\s+bitmap|no\s+exposed\s+file\s+path|"
@@ -1992,7 +2019,7 @@ def audit_html(
         )
         if strict and expected_visuals and re.search(image_generation_downgrade_pattern, image_model, re.I):
             errors.append(
-                f"{path}: manifest records an Image 2 downgrade/fallback for generated visuals, not a confirmed generated asset: '{image_model}'"
+                f"{path}: manifest records an image-generation downgrade/fallback instead of a confirmed generated asset: '{image_model}'"
             )
         if strict and re.search(image_generation_downgrade_pattern, image_model, re.I) and not image_fallback_approved:
             errors.append(
@@ -2296,15 +2323,8 @@ def audit_html(
                         if strict and isinstance(inventory_data, dict) and str(source_fidelity.get("source_format", "")).lower() == "pdf":
                             has_selected_only = isinstance(inventory_data.get("selected_blocks"), list)
                             has_full_inventory = any(
-                                key in inventory_data
-                                for key in (
-                                    "all_source_blocks",
-                                    "all_main_text_blocks",
-                                    "full_paper_blocks",
-                                    "main_text_blocks",
-                                    "full_paper_total",
-                                    "main_text_total_blocks",
-                                )
+                                isinstance(inventory_data.get(key), list) and bool(inventory_data.get(key))
+                                for key in ("all_source_blocks", "all_main_text_blocks", "full_paper_blocks", "main_text_blocks")
                             )
                             if has_selected_only and not has_full_inventory:
                                 errors.append(
@@ -2324,6 +2344,8 @@ def audit_html(
             included_ids = {str(item.get("source_id")) for item in source_blocks if isinstance(item, dict) and item.get("source_id")} if isinstance(source_blocks, list) else set()
             omitted_entries = manifest.get("omitted_source_blocks") if isinstance(manifest.get("omitted_source_blocks"), list) else []
             omitted_ids = {str(item.get("source_id")) for item in omitted_entries if isinstance(item, dict) and item.get("source_id")}
+            if strict and str(source_fidelity.get("source_format", "")).lower() == "pdf" and not full_inventory_ids:
+                errors.append(f"{path}: strict PDF HTML audit requires a full paragraph/block inventory with stable source ids; totals alone cannot prove complete coverage")
             if full_inventory_ids:
                 if scope_mode == "complete":
                     if omitted_ids or included_ids != full_inventory_ids:
@@ -2687,7 +2709,7 @@ def audit_html(
                     and non_appendix_chapters
                 ):
                     errors.append(
-                        f"{path}: generated_visuals_expected=0 bypasses the default per-chapter Image 2 requirement; "
+                        f"{path}: generated_visuals_expected=0 bypasses the default per-chapter generated-visual requirement; "
                         "record the real expected count or an explicit user-approved fallback"
                     )
                 for index, chapter in enumerate(non_appendix_chapters, start=1):
@@ -2713,21 +2735,22 @@ def audit_html(
                 for index, item in enumerate(generated_visuals, start=1):
                     if not isinstance(item, dict):
                         continue
-                    item_model = str(item.get("model_name") or item.get("tool") or image_model or "")
+                    item_model = str(item.get("model_name") or image_model or "")
                     if not item_model:
-                        errors.append(f"{path}: generated visual #{index} must record model_name/tool")
-                    elif strict and not re.search(image2_pattern, item_model, re.I):
-                        errors.append(f"{path}: generated visual #{index} must record Image 2/gpt-image-2 provenance, not '{item_model}'")
+                        errors.append(f"{path}: generated visual #{index} must record the actual model_name")
                     elif strict and re.search(image_generation_downgrade_pattern, item_model, re.I):
                         errors.append(
-                            f"{path}: generated visual #{index} records an Image 2 downgrade/fallback, not confirmed Image 2 provenance: '{item_model}'"
+                            f"{path}: generated visual #{index} records a downgrade/fallback instead of confirmed model provenance: '{item_model}'"
                         )
+                    for provenance_field in ("provider", "tool", "request_id"):
+                        if not item.get(provenance_field):
+                            errors.append(f"{path}: generated visual #{index} must record {provenance_field}")
                     visual_path = str(item.get("path", "") or "")
                     if not visual_path:
                         errors.append(f"{path}: generated visual #{index} must record a local bitmap path")
                     else:
                         if re.search(r"\.svg(\?|#|$)", visual_path, re.I):
-                            errors.append(f"{path}: generated visual #{index} path is SVG; use a real Image 2 bitmap asset: {visual_path}")
+                            errors.append(f"{path}: generated visual #{index} path is SVG; use a real image-model bitmap asset: {visual_path}")
                         asset = (root / visual_path.split("#", 1)[0].split("?", 1)[0]).resolve()
                         try:
                             asset.relative_to(root.resolve())
@@ -2736,6 +2759,8 @@ def audit_html(
                         if not asset.exists():
                             errors.append(f"{path}: generated visual #{index} missing image asset: {visual_path}")
                         else:
+                            for issue in validate_generated_asset_provenance(item, asset, root):
+                                errors.append(f"{path}: generated visual #{index} provenance failed: {issue}")
                             kind = image_asset_kind(asset)
                             if kind not in {"png", "jpeg", "webp"}:
                                 errors.append(f"{path}: generated visual #{index} is not a PNG/JPEG/WebP bitmap asset: {visual_path}")

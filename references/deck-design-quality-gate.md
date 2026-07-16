@@ -47,9 +47,9 @@ Use multiple coherent composition families:
 - quotation or argument transition
 - recap/reconstruction
 
-Record `layout_family` on each slide. No single content layout family should occupy more than about 60% of teaching slides unless the design brief explains why the paper genuinely requires it. Avoid consecutive repetition of the same left-text/right-image composition.
+Record `layout_family` for planning, but never accept the manifest label as proof. The strict audit clusters browser-rendered geometry from headings, information groups, tables, images, diagrams, and teaching objects. Renaming the same split layout does not create a new family.
 
-Do not repeat one main composition for more than three consecutive teaching slides. Across a medium or detailed deck, use at least four materially different composition families.
+Do not repeat the same or a geometrically similar main composition for more than two consecutive teaching slides. A 20-page deck needs at least six materially different rendered composition families; shorter medium decks still need at least four.
 
 ## Reading Rhythm
 
@@ -67,9 +67,11 @@ Low-density pages are rare and intentional. A sentence with a few unlabeled boxe
 - At a 1366x768 browser viewport, key HTML text and in-image labels must remain comfortably readable. Treat labels whose rendered height is below roughly 16px as a failure.
 - Do not place a complex diagram in a thumbnail beside a long paragraph.
 - If a figure cannot meet these constraints, split it or use image-above/explanation-below across multiple slides.
-- Meaningful teaching content should normally occupy roughly 55%-80% of the stage. Large empty regions are acceptable only when they create a deliberate tension, transition, or conclusion beat.
-- Dense teaching pages should normally contain 3-7 visible information groups. Overview/concept pages normally fall near 350-650 Chinese characters; evidence/comparison pages near 450-900, excluding citations and text already readable inside evidence objects. Treat these as diagnostics, not permission to use tiny text.
-- A source crop used as evidence should normally occupy at least 40% of the stage or receive its own zoom page with 2-4 annotations.
+- Meaningful teaching content should normally occupy roughly 55%-80% of the stage. Strict QA measures browser geometry and screenshot pixels; a normal body slide that uses less than about 38% of the stage or leaves nearly all of the lower half empty fails.
+- PPTX QA repeats these checks from OOXML shape/picture geometry. A very tall or wide one-line body text box counts only at its estimated rendered text height and is reported as an oversized empty box; it cannot hide a blank lower half. Legal title/cover title placeholders are excluded from this oversized-body rule.
+- Dense teaching pages should normally contain 3-7 visible information groups. Do not use a 350-900 character quota. Judge completeness from the visible claim/question, reasoning or mechanism, evidence/example, implication, and boundary; then verify font size, canvas use, and visual evidence.
+- At least 70% of body slides must contain a rendered effective visual object: a real bitmap, non-trivial SVG/canvas, structured table, source evidence object, formula/example breakdown, or an equivalent browser-visible teaching object with substantial geometry. Decorative thumbnails and empty wrappers do not count.
+- On ordinary teaching pages, source screenshots should normally occupy no more than 40% of the stage. Use a dedicated evidence close-reading page when the original figure/table needs more room.
 
 ## Evidence Styling
 
@@ -90,6 +92,11 @@ Reject the deck when:
 - it uses a generic purple/blue AI gradient with no paper-specific reason
 - most pages are nested cards or dashboard panels
 - every page repeats the same split layout
+- the same or similar rendered structure appears on three consecutive teaching pages
+- a 20-page deck has fewer than six materially different rendered layouts
+- fewer than 70% of body slides contain an effective visual object
+- ordinary pages let source screenshots occupy more than 40% of the stage
+- body pages leave the lower half substantially blank or use too little of the canvas
 - decorative images dominate while mechanisms and evidence remain text-only
 - the paper motif appears only on the cover
 - title scale, body scale, and visual scale do not change with the teaching job
@@ -105,6 +112,7 @@ Reject the deck when:
 - the deck has high character count but lacks a conclusion, reasoning chain, evidence/example, implication, or relevant boundary
 - a page title names a topic but does not state the question or conclusion
 - exact evidence is replaced by a generated illustration
+- PPTX slide 1 flattens the title or body/subtitle into a full-slide image instead of separate editable text shapes
 
 ## Required Visual Review
 
@@ -113,12 +121,12 @@ Render every slide, then review:
 1. hierarchy and focal point
 2. image scale and crop
 3. typography and bilingual spacing
-4. repeated layout rhythm
+4. repeated and near-duplicate layout rhythm, including the real rendered-family count
 5. source/generated distinction
 6. label readability
 7. overflow, collision, and clipping
 8. first-slide and first-content-slide specificity
-9. independent-reading completeness
+9. independent-reading completeness, canvas utilization, and lower-half occupancy
 10. conclusion -> explanation -> evidence -> implication structure where relevant
 
-Record concrete failures and fixes in `qa/qa-report.json`. A manifest checkbox without rendered screenshots is not enough.
+Record concrete failures and fixes in `qa/qa-report.json`. A manifest checkbox without rendered screenshots is not enough. Strict acceptance is based on browser geometry, edge-palette screenshot pixels, exported PDF rendering, and PPTX OOXML editability/geometry. PPTX image area is tied to embedded media hashes and relationship metadata where available.

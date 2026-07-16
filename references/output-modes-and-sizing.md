@@ -4,7 +4,7 @@
 
 Ask for one primary output:
 
-- `image-series`: direct model-generated, high-information infographics plus a page-matched album PDF
+- `image-series`: direct model-generated, high-information learning-album pages plus a page-matched PDF; recommended for personal study
 - `presentation-pdf`: a dense 16:9 presentation report for explaining the source to other people, delivered as PDF plus editable PPTX
 - `interactive-html`: interactive bilingual/Chinese source reader and deployable website
 
@@ -26,7 +26,7 @@ Build a complexity score after source inventory:
 Choose:
 
 - score 0-7: concise, normally 7-10 items
-- score 8-15: medium, normally 12-18 items
+- score 8-15: medium, normally 11-20 items
 - score 16+: detailed, normally 21-32 items
 
 When automatic is requested, record `size_mode_requested: automatic`, resolved `size_mode`, complexity score/breakdown, a target range, maximum count, final resolved count, and rationale. The resolved count may move inside the target range after removing filler; it does not need to equal an early single-number estimate.
@@ -38,8 +38,8 @@ Use judgment. A short but mathematically difficult paper may need medium detail;
 ### Image Series
 
 - Concise: 6-10 images
-- Medium: 12-18 images
-- Detailed: 21-30 images, rarely above 36
+- Medium: 11-20 images
+- Detailed: 21-36 images
 - Each image is a complete native generated infographic with a visible Chinese title and sufficient integrated explanation.
 - Always establish the source reading/argument route and core ideas early. Choose later images dynamically from concepts, chapter progression, method, architecture, examples, experiments, evaluation, causal/evidence chains, and user focus.
 - The whole-source context map and core-idea/contribution map are always two separate images, including concise mode.
@@ -51,7 +51,7 @@ Use judgment. A short but mathematically difficult paper may need medium detail;
 - Medium: 12-20 pages
 - Detailed: 21-36 pages
 - Use consulting/research-report density for presenting and later reading. A normal page should contain one conclusion-led message expressed through 3-7 structured information groups: explanation chain, evidence/example, implication, and relevant boundary.
-- As a diagnostic rather than a quota, overview/concept pages normally carry 350-650 Chinese characters; evidence/comparison/close-reading pages normally carry 450-900, excluding text already readable inside charts and tables. A page may use fewer words when a large visual or evidence object performs equivalent teaching work.
+- Do not optimize for a fixed character count. Judge whether the rendered page contains enough definition, reasoning, evidence/example, implication, and boundary to stand alone at a readable type size.
 - Split dense evidence when there are multiple major messages or legibility would fail. Do not split merely to create sparse keynote pages, and do not shrink type to imitate a research-report screenshot.
 - Detailed PPT coverage is broader than detailed image-series coverage and should include important source figures/tables and experimental interpretation.
 

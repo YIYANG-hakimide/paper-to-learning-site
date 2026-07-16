@@ -5,13 +5,22 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from generation_provenance import validate_generated_asset_provenance
 
 try:
     from PIL import Image, ImageChops, ImageStat
@@ -22,6 +31,10 @@ except Exception:  # Pillow is recommended by preflight but keep the audit reada
 
 
 BITMAP_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+NON_BODY_SLIDE_TYPES = {"title", "divider", "evidence-appendix"}
+NON_LAYOUT_SLIDE_TYPES = {"title", "divider", "evidence-appendix"}
+PML_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+DML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 FORBIDDEN_PUBLIC_TEXT = (
     "面向无专业背景",
     "reader level",
@@ -174,6 +187,480 @@ def command_path(name: str) -> str | None:
     return shutil.which(name)
 
 
+def _slide_number(path: str) -> int:
+    match = re.search(r"slide(\d+)\.xml$", path)
+    return int(match.group(1)) if match else 0
+
+
+def _bytes_sha256(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _grid_coverage(rects: list[dict], width: int, height: int, y_start: float = 0) -> float:
+    columns = 48
+    rows = 27
+    occupied: set[tuple[int, int]] = set()
+    first_available_row = int(y_start / height * rows)
+    for rect in rects:
+        left = max(0.0, float(rect.get("left", 0)))
+        top = max(y_start, float(rect.get("top", 0)))
+        right = min(float(width), float(rect.get("right", 0)))
+        bottom = min(float(height), float(rect.get("bottom", 0)))
+        if right <= left or bottom <= top:
+            continue
+        first_column = max(0, int(left / width * columns))
+        last_column = min(columns - 1, int(max(left, right - 1) / width * columns))
+        first_row = max(first_available_row, int(top / height * rows))
+        last_row = min(rows - 1, int(max(top, bottom - 1) / height * rows))
+        for row in range(first_row, last_row + 1):
+            for column in range(first_column, last_column + 1):
+                occupied.add((row, column))
+    available_rows = rows - first_available_row
+    return len(occupied) / max(1, columns * available_rows)
+
+
+def _shape_geometry(element: ET.Element, kind: str, slide_width: int, slide_height: int) -> dict | None:
+    if kind == "graphic":
+        xfrm = element.find(f"./{{{PML_NS}}}xfrm")
+    else:
+        xfrm = element.find(f"./{{{PML_NS}}}spPr/{{{DML_NS}}}xfrm")
+    offset = xfrm.find(f"{{{DML_NS}}}off") if xfrm is not None else None
+    extent = xfrm.find(f"{{{DML_NS}}}ext") if xfrm is not None else None
+    if offset is None or extent is None:
+        return None
+    left = int(offset.get("x", "0"))
+    top = int(offset.get("y", "0"))
+    width = int(extent.get("cx", "0"))
+    height = int(extent.get("cy", "0"))
+    if width <= 0 or height <= 0 or left >= slide_width or top >= slide_height:
+        return None
+    return {
+        "left": left,
+        "top": top,
+        "right": min(slide_width, left + width),
+        "bottom": min(slide_height, top + height),
+        "width": min(width, slide_width - left),
+        "height": min(height, slide_height - top),
+        "raw_width": width,
+        "raw_height": height,
+    }
+
+
+def _layout_tokens(objects: list[dict], slide_width: int, slide_height: int) -> list[str]:
+    tokens: set[str] = set()
+    for item in objects:
+        rect = item["rect"]
+        center_column = min(5, int(((rect["left"] + rect["right"]) / 2) / slide_width * 6))
+        center_row = min(3, int(((rect["top"] + rect["bottom"]) / 2) / slide_height * 4))
+        width_bucket = max(1, min(4, round(rect["width"] / slide_width * 4)))
+        height_bucket = max(1, min(4, round(rect["height"] / slide_height * 4)))
+        tokens.add(f"{item['kind']}:{center_column}:{center_row}:{width_bucket}:{height_bucket}")
+    return sorted(tokens)
+
+
+def inspect_pptx_geometry(
+    pptx_path: Path,
+    slide_items: list[dict] | None = None,
+    generated_visuals: list[dict] | None = None,
+) -> tuple[list[dict], list[str]]:
+    issues: list[str] = []
+    results: list[dict] = []
+    generated_hashes = {
+        normalized_hash(item.get("asset_sha256"))
+        for item in (generated_visuals or [])
+        if normalized_hash(item.get("asset_sha256"))
+    }
+    source_hashes = {
+        normalized_hash(evidence.get("asset_sha256"))
+        for slide in (slide_items or [])
+        for evidence in slide.get("source_evidence_objects", [])
+        if normalized_hash(evidence.get("asset_sha256"))
+    }
+    with zipfile.ZipFile(pptx_path) as archive:
+        slide_width, slide_height = 12192000, 6858000
+        if "ppt/presentation.xml" in archive.namelist():
+            presentation = ET.fromstring(archive.read("ppt/presentation.xml"))
+            size = presentation.find(f".//{{{PML_NS}}}sldSz")
+            if size is not None:
+                slide_width = int(size.get("cx", slide_width))
+                slide_height = int(size.get("cy", slide_height))
+        slide_names = sorted(
+            (name for name in archive.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)),
+            key=_slide_number,
+        )
+        for index, slide_name in enumerate(slide_names, 1):
+            slide = ET.fromstring(archive.read(slide_name))
+            relationship_path = posixpath.join(
+                posixpath.dirname(slide_name),
+                "_rels",
+                f"{posixpath.basename(slide_name)}.rels",
+            )
+            relationships: dict[str, str] = {}
+            if relationship_path in archive.namelist():
+                relationship_root = ET.fromstring(archive.read(relationship_path))
+                relationships = {
+                    relation.get("Id", ""): posixpath.normpath(
+                        posixpath.join(posixpath.dirname(slide_name), relation.get("Target", ""))
+                    ).lstrip("/")
+                    for relation in relationship_root
+                }
+
+            content_objects: list[dict] = []
+            layout_objects: list[dict] = []
+            visual_rects: list[dict] = []
+            source_rects: list[dict] = []
+            oversized_boxes = 0
+
+            for shape in slide.findall(f".//{{{PML_NS}}}sp"):
+                rect = _shape_geometry(shape, "shape", slide_width, slide_height)
+                text = "".join(node.text or "" for node in shape.findall(f".//{{{DML_NS}}}t")).strip()
+                if rect is None or not text:
+                    continue
+                paragraph_count = max(1, len([node for node in shape.findall(f".//{{{DML_NS}}}p") if "".join(part.text or "" for part in node.findall(f".//{{{DML_NS}}}t")).strip()]))
+                sizes = [
+                    int(node.get("sz", "0"))
+                    for node in shape.findall(f".//*[@sz]")
+                    if node.get("sz", "").isdigit()
+                ]
+                max_font_size = max(sizes, default=1800)
+                estimated_text_height = max_font_size / 100 * 12700 * max(1.35, paragraph_count * 1.25)
+                effective_rect = dict(rect)
+                effective_rect["height"] = min(rect["height"], estimated_text_height)
+                effective_rect["bottom"] = min(rect["bottom"], rect["top"] + effective_rect["height"])
+                placeholder = shape.find(f"./{{{PML_NS}}}nvSpPr/{{{PML_NS}}}nvPr/{{{PML_NS}}}ph")
+                placeholder_type = placeholder.get("type", "") if placeholder is not None else ""
+                kind = "heading" if placeholder_type in {"title", "ctrTitle"} or max_font_size >= 2800 else "group"
+                content_objects.append({"kind": kind, "rect": effective_rect})
+                if (
+                    placeholder_type not in {"title", "ctrTitle"}
+                    and paragraph_count == 1
+                    and len(text) <= 80
+                    and (
+                        (rect["width"] / slide_width > 0.70 and rect["height"] / slide_height > 0.22)
+                        or (
+                            rect["raw_width"] / slide_width > 0.88
+                            and rect["raw_height"] / slide_height > 0.07
+                        )
+                    )
+                ):
+                    oversized_boxes += 1
+                if rect["width"] * rect["height"] >= slide_width * slide_height * 0.012:
+                    layout_objects.append({"kind": kind, "rect": effective_rect})
+
+            for picture in slide.findall(f".//{{{PML_NS}}}pic"):
+                rect = _shape_geometry(picture, "picture", slide_width, slide_height)
+                if rect is None:
+                    continue
+                blip = picture.find(f".//{{{DML_NS}}}blip")
+                embed = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed", "") if blip is not None else ""
+                target = relationships.get(embed, "")
+                media_hash = ""
+                natural_ratio = 0.0
+                if target in archive.namelist():
+                    payload = archive.read(target)
+                    media_hash = _bytes_sha256(payload)
+                    if Image is not None:
+                        try:
+                            with Image.open(io.BytesIO(payload)) as image:
+                                natural_ratio = image.height / max(1, image.width)
+                        except Exception:
+                            natural_ratio = 0.0
+                properties = picture.find(f"./{{{PML_NS}}}nvPicPr/{{{PML_NS}}}cNvPr")
+                cue = " ".join(
+                    [
+                        target,
+                        properties.get("name", "") if properties is not None else "",
+                        properties.get("descr", "") if properties is not None else "",
+                        properties.get("title", "") if properties is not None else "",
+                    ]
+                ).lower()
+                area_ratio = rect["width"] * rect["height"] / (slide_width * slide_height)
+                is_generated = media_hash in generated_hashes
+                is_source = media_hash in source_hashes or bool(re.search(r"source|evidence|screenshot|crop|paper[-_ ]?page|原文|证据", cue))
+                if not is_generated and natural_ratio > 1.15 and area_ratio >= 0.12:
+                    is_source = True
+                content_objects.append({"kind": "source" if is_source else "visual", "rect": rect})
+                if area_ratio >= 0.035:
+                    visual_rects.append(rect)
+                    layout_objects.append({"kind": "visual", "rect": rect})
+                if is_source:
+                    source_rects.append(rect)
+
+            for graphic in slide.findall(f".//{{{PML_NS}}}graphicFrame"):
+                rect = _shape_geometry(graphic, "graphic", slide_width, slide_height)
+                if rect is None:
+                    continue
+                area_ratio = rect["width"] * rect["height"] / (slide_width * slide_height)
+                kind = "table" if graphic.find(f".//{{{DML_NS}}}tbl") is not None else "visual"
+                content_objects.append({"kind": kind, "rect": rect})
+                if area_ratio >= 0.035:
+                    visual_rects.append(rect)
+                    layout_objects.append({"kind": kind, "rect": rect})
+
+            if oversized_boxes:
+                issues.append(
+                    f"PPTX OOXML slide {index} contains {oversized_boxes} oversized one-line text box(es) whose empty bounds inflate apparent canvas use."
+                )
+            content_rects = [item["rect"] for item in content_objects]
+            results.append(
+                {
+                    "index": index,
+                    "layoutTokens": _layout_tokens(layout_objects, slide_width, slide_height),
+                    "layoutObjectCount": len(layout_objects),
+                    "validVisualObjectCount": len(visual_rects),
+                    "sourceScreenshotObjectCount": len(source_rects),
+                    "validVisualAreaRatio": _grid_coverage(visual_rects, slide_width, slide_height),
+                    "sourceScreenshotAreaRatio": _grid_coverage(source_rects, slide_width, slide_height),
+                    "contentAreaRatio": _grid_coverage(content_rects, slide_width, slide_height),
+                    "lowerHalfContentRatio": _grid_coverage(content_rects, slide_width, slide_height, slide_height / 2),
+                    "pixelMetrics": None,
+                }
+            )
+    return results, issues
+
+
+def validate_pptx_editability(
+    pptx_path: Path,
+    expected_pages: int,
+    slide_items: list[dict] | None = None,
+    generated_visuals: list[dict] | None = None,
+) -> list[str]:
+    """Inspect OOXML directly so a full-slide screenshot cannot masquerade as editable PPTX."""
+    issues: list[str] = []
+    if not pptx_path.exists() or pptx_path.stat().st_size < 1024:
+        return ["Editable PPTX export is missing or suspiciously small."]
+    try:
+        with zipfile.ZipFile(pptx_path) as archive:
+            slide_names = sorted(
+                (
+                    name
+                    for name in archive.namelist()
+                    if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)
+                ),
+                key=_slide_number,
+            )
+            if len(slide_names) != expected_pages:
+                issues.append(
+                    f"PPTX slide count does not match deck: pptx={len(slide_names)}, slides={expected_pages}."
+                )
+            if not slide_names:
+                issues.append("PPTX contains no slide XML.")
+                return issues
+
+            slide_width, slide_height = 12192000, 6858000
+            if "ppt/presentation.xml" in archive.namelist():
+                presentation = ET.fromstring(archive.read("ppt/presentation.xml"))
+                size = presentation.find(f".//{{{PML_NS}}}sldSz")
+                if size is not None:
+                    slide_width = int(size.get("cx", slide_width))
+                    slide_height = int(size.get("cy", slide_height))
+
+            first_slide = ET.fromstring(archive.read(slide_names[0]))
+            editable_shapes: list[dict] = []
+            for shape in first_slide.findall(f".//{{{PML_NS}}}sp"):
+                text = "".join(node.text or "" for node in shape.findall(f".//{{{DML_NS}}}t")).strip()
+                if not text:
+                    continue
+                xfrm = shape.find(f"./{{{PML_NS}}}spPr/{{{DML_NS}}}xfrm")
+                offset = xfrm.find(f"{{{DML_NS}}}off") if xfrm is not None else None
+                extent = xfrm.find(f"{{{DML_NS}}}ext") if xfrm is not None else None
+                if offset is None or extent is None:
+                    continue
+                x = int(offset.get("x", "0"))
+                y = int(offset.get("y", "0"))
+                width = int(extent.get("cx", "0"))
+                height = int(extent.get("cy", "0"))
+                if width <= 0 or height <= 0 or x >= slide_width or y >= slide_height:
+                    continue
+                placeholder = shape.find(f"./{{{PML_NS}}}nvSpPr/{{{PML_NS}}}nvPr/{{{PML_NS}}}ph")
+                placeholder_type = placeholder.get("type", "") if placeholder is not None else ""
+                sizes = [
+                    int(node.get("sz", "0"))
+                    for node in shape.findall(f".//*[@sz]")
+                    if node.get("sz", "").isdigit()
+                ]
+                editable_shapes.append(
+                    {
+                        "text": text,
+                        "x": x,
+                        "y": y,
+                        "width": width,
+                        "height": height,
+                        "placeholder": placeholder_type,
+                        "max_font_size": max(sizes, default=0),
+                    }
+                )
+
+            title_shapes = [
+                shape
+                for shape in editable_shapes
+                if shape["placeholder"] in {"title", "ctrTitle"}
+                or (
+                    shape["y"] < slide_height * 0.45
+                    and shape["max_font_size"] >= 2400
+                    and len(shape["text"]) >= 2
+                )
+            ]
+            body_shapes = [
+                shape
+                for shape in editable_shapes
+                if shape["placeholder"] in {"body", "subTitle", "obj"}
+                or (
+                    len(shape["text"]) >= 8
+                    and shape["max_font_size"] >= 1200
+                    and shape not in title_shapes
+                )
+            ]
+            if not title_shapes:
+                issues.append("PPTX first slide has no visible editable title text box; the title may be flattened into an image.")
+            if not body_shapes:
+                issues.append("PPTX first slide has no separate visible editable body/subtitle text box; body copy may be flattened into an image.")
+            geometry_results, geometry_issues = inspect_pptx_geometry(pptx_path, slide_items, generated_visuals)
+            issues.extend(geometry_issues)
+            if slide_items:
+                issues.extend(audit_rendered_design(geometry_results, slide_items, origin="PPTX OOXML"))
+    except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError, ValueError) as exc:
+        issues.append(f"Editable PPTX OOXML could not be inspected: {exc}")
+    return issues
+
+
+def pixel_content_metrics(path: Path) -> dict[str, float] | None:
+    if Image is None:
+        return None
+    try:
+        with Image.open(path) as image:
+            sample = image.convert("RGB").resize((320, 180))
+            border_pixels = []
+            for y in range(180):
+                for x in (*range(0, 4), *range(316, 320)):
+                    border_pixels.append(sample.getpixel((x, y)))
+            for y in (*range(0, 4), *range(176, 180)):
+                for x in range(4, 316):
+                    border_pixels.append(sample.getpixel((x, y)))
+            color_counts: dict[tuple[int, int, int], int] = {}
+            for pixel in border_pixels:
+                bucket = tuple(round(channel / 16) * 16 for channel in pixel)
+                color_counts[bucket] = color_counts.get(bucket, 0) + 1
+            background_palette = [
+                color
+                for color, _ in sorted(color_counts.items(), key=lambda item: item[1], reverse=True)[:6]
+            ]
+            pixels = list(sample.get_flattened_data()) if hasattr(sample, "get_flattened_data") else list(sample.getdata())
+            foreground = [
+                min(
+                    sum(abs(pixel[channel] - background[channel]) for channel in range(3))
+                    for background in background_palette
+                )
+                >= 36
+                for pixel in pixels
+            ]
+            lower = foreground[320 * 90 :]
+            return {
+                "foreground_ratio": sum(foreground) / len(foreground),
+                "lower_half_foreground_ratio": sum(lower) / len(lower),
+            }
+    except Exception:
+        return None
+
+
+def layouts_are_similar(left: dict, right: dict) -> bool:
+    left_tokens = set(left.get("layoutTokens", []))
+    right_tokens = set(right.get("layoutTokens", []))
+    if not left_tokens or not right_tokens:
+        return False
+    overlap = len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
+    left_count = int(left.get("layoutObjectCount", 0))
+    right_count = int(right.get("layoutObjectCount", 0))
+    count_close = abs(left_count - right_count) <= max(1, round(max(left_count, right_count) * 0.25))
+    return overlap >= 0.72 and count_close
+
+
+def rendered_layout_family_count(results: list[dict]) -> int:
+    representatives: list[dict] = []
+    for result in results:
+        if not any(layouts_are_similar(result, representative) for representative in representatives):
+            representatives.append(result)
+    return len(representatives)
+
+
+def audit_rendered_design(results: list[dict], slide_items: list[dict], origin: str = "Rendered") -> list[str]:
+    issues: list[str] = []
+    body_results: list[dict] = []
+    layout_results: list[dict] = []
+    for result in results:
+        index = result.get("index")
+        slide = slide_items[index - 1] if isinstance(index, int) and 0 < index <= len(slide_items) else {}
+        slide_type = str(slide.get("type", ""))
+        if slide_type in NON_BODY_SLIDE_TYPES:
+            continue
+        body_results.append(result)
+        if slide_type not in NON_LAYOUT_SLIDE_TYPES:
+            layout_results.append(result)
+
+        pixel_metrics = result.get("pixelMetrics") or {}
+        lower_geometry = float(result.get("lowerHalfContentRatio", 0) or 0)
+        lower_pixels = pixel_metrics.get("lower_half_foreground_ratio")
+        if lower_geometry < 0.20 and (
+            lower_pixels is None or float(lower_pixels) < 0.12
+        ):
+            issues.append(
+                f"{origin} slide {index} leaves the lower half substantially blank: geometry={lower_geometry:.2f}, "
+                f"pixels={float(lower_pixels or 0):.2f}."
+            )
+
+        content_area = float(result.get("contentAreaRatio", 0) or 0)
+        foreground = pixel_metrics.get("foreground_ratio")
+        if content_area < 0.38 and (foreground is None or float(foreground) < 0.24):
+            issues.append(
+                f"{origin} slide {index} underuses the canvas: meaningful content covers only {content_area:.2f} of the stage."
+            )
+
+        ordinary_page = str(slide.get("reasoning_role", "")) != "evidence" and str(slide.get("sequence_role", "")) not in {
+            "evidence",
+            "source-evidence",
+            "evidence-close-reading",
+        }
+        source_ratio = float(result.get("sourceScreenshotAreaRatio", 0) or 0)
+        if ordinary_page and source_ratio > 0.40:
+            issues.append(
+                f"{origin} slide {index} lets source screenshots occupy {source_ratio:.2f} of an ordinary teaching page; keep them at or below 0.40 or use a dedicated evidence page."
+            )
+
+    if body_results:
+        visual_pages = [result for result in body_results if int(result.get("validVisualObjectCount", 0) or 0) > 0]
+        visual_ratio = len(visual_pages) / len(body_results)
+        if visual_ratio < 0.70:
+            issues.append(
+                f"{origin} effective visual-object coverage is below 70% of body slides: {len(visual_pages)}/{len(body_results)} ({visual_ratio:.0%})."
+            )
+        visual_objects = sum(int(result.get("validVisualObjectCount", 0) or 0) for result in body_results)
+        source_objects = sum(int(result.get("sourceScreenshotObjectCount", 0) or 0) for result in body_results)
+        if visual_objects >= 4 and source_objects / visual_objects > 0.60:
+            issues.append(
+                f"{origin} deck is source-screenshot dominated: {source_objects}/{visual_objects} effective visual objects are source screenshots."
+            )
+
+    if layout_results:
+        family_count = rendered_layout_family_count(layout_results)
+        required_families = 6 if len(slide_items) >= 20 else 4 if len(layout_results) >= 10 else 3 if len(layout_results) >= 6 else 1
+        if family_count < required_families:
+            issues.append(
+                f"{origin} geometry provides only {family_count} materially different layouts; this deck requires at least {required_families}."
+            )
+        streak = 1
+        for index in range(1, len(layout_results)):
+            if layouts_are_similar(layout_results[index - 1], layout_results[index]):
+                streak += 1
+                if streak > 2:
+                    issues.append(
+                        f"The same or a similar {origin.lower()} structure repeats for more than two consecutive teaching slides near slide {layout_results[index].get('index')}."
+                    )
+                    break
+            else:
+                streak = 1
+    return issues
+
+
 def validate_pdf(
     pdf_path: Path,
     expected_pages: int,
@@ -301,15 +788,18 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: st
         errors.append("Teaching inventory must identify at least one hard concept.")
     if not inventory.get("central_claims"):
         errors.append("Teaching inventory must identify at least one central claim.")
-    if "paper_has_experiments" not in inventory:
-        errors.append("Teaching inventory must record paper_has_experiments.")
-    elif inventory.get("paper_has_experiments") is True and not inventory.get("experiments"):
-        errors.append("Teaching inventory says the paper has experiments but experiments[] is empty.")
+    source_has_experiments = inventory.get("source_has_experiments", inventory.get("paper_has_experiments"))
+    if source_has_experiments is None:
+        errors.append("Teaching inventory must record source_has_experiments.")
+    elif source_has_experiments is True and not inventory.get("experiments"):
+        errors.append("Teaching inventory says the source has experiments but experiments[] is empty.")
     final_items = {str(item.get("id")): item for item in manifest.get("slides", []) if item.get("id")}
     for concept in inventory.get("hard_concepts", []):
-        for field in ("term", "plain_label", "field_definition", "plain_explanation", "paper_specific_meaning", "author_usage", "common_misunderstanding", "definition_item_ids", "visible_dom_ids"):
+        for field in ("term", "plain_label", "field_definition", "plain_explanation", "author_usage", "common_misunderstanding", "definition_item_ids", "first_use_item_id", "visible_dom_ids"):
             if not concept.get(field):
                 errors.append(f"Hard concept {concept.get('id', '[unknown]')} is missing {field}.")
+        if not (concept.get("source_specific_meaning") or concept.get("paper_specific_meaning")):
+            errors.append(f"Hard concept {concept.get('id', '[unknown]')} is missing source_specific_meaning.")
         concept_id = str(concept.get("id", ""))
         for dom_id in concept.get("visible_dom_ids", []) or []:
             if not re.search(rf'id=["\']{re.escape(str(dom_id))}["\']', html):
@@ -320,6 +810,12 @@ def audit_teaching_coverage(root: Path, manifest: dict, size_mode: str, html: st
                 errors.append(f"Hard concept {concept_id} references missing definition slide {item_id}.")
             elif concept_id not in {str(value) for value in item.get("explained_concept_ids", [])}:
                 errors.append(f"Definition slide {item_id} does not declare explained_concept_ids coverage for {concept_id}.")
+        ordered_ids = list(final_items)
+        first_use_id = str(concept.get("first_use_item_id", ""))
+        definition_ids = [str(value) for value in concept.get("definition_item_ids", []) if str(value) in final_items]
+        if first_use_id in final_items and definition_ids:
+            if min(ordered_ids.index(value) for value in definition_ids) > ordered_ids.index(first_use_id):
+                errors.append(f"Hard concept {concept_id} is first used before its definition/explanation slide.")
     for experiment in inventory.get("experiments", []):
         for field in (
             "comparison_objects",
@@ -511,8 +1007,64 @@ const { pathToFileURL } = require('url');
     }, index);
     await page.waitForTimeout(30);
     const expectedVisibleIds = expectedIdsBySlide[String(index + 1)] || [];
-    const metrics = await page.locator('.slide, [data-slide]').nth(index).evaluate((slide, expectedVisibleIds) => {
-      const brokenImages = [...slide.querySelectorAll('img')].filter(img => !img.complete || img.naturalWidth === 0).length;
+	  const metrics = await page.locator('.slide, [data-slide]').nth(index).evaluate((slide, expectedVisibleIds) => {
+	      const stageWidth = 1920;
+	      const stageHeight = 1080;
+	      const isVisible = el => {
+	        const style = getComputedStyle(el);
+	        const box = el.getBoundingClientRect();
+	        return style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity || '1') > 0 && box.width > 2 && box.height > 2;
+	      };
+	      const clippedRect = el => {
+	        const box = el.getBoundingClientRect();
+	        const left = Math.max(0, box.left);
+	        const top = Math.max(0, box.top);
+	        const right = Math.min(stageWidth, box.right);
+	        const bottom = Math.min(stageHeight, box.bottom);
+	        return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+	      };
+	      const gridCoverage = (rects, yStart = 0) => {
+	        const columns = 48;
+	        const rows = 27;
+	        const occupied = new Set();
+	        rects.forEach(rect => {
+	          const firstColumn = Math.max(0, Math.floor(rect.left / stageWidth * columns));
+	          const lastColumn = Math.min(columns - 1, Math.floor(Math.max(rect.left, rect.right - 1) / stageWidth * columns));
+	          const firstRow = Math.max(Math.floor(yStart / stageHeight * rows), Math.floor(rect.top / stageHeight * rows));
+	          const lastRow = Math.min(rows - 1, Math.floor(Math.max(rect.top, rect.bottom - 1) / stageHeight * rows));
+	          for (let row = firstRow; row <= lastRow; row += 1) {
+	            for (let column = firstColumn; column <= lastColumn; column += 1) occupied.add(`${row}:${column}`);
+	          }
+	        });
+	        const availableRows = rows - Math.floor(yStart / stageHeight * rows);
+	        return occupied.size / Math.max(1, columns * availableRows);
+	      };
+	      const visualCandidates = [...slide.querySelectorAll('img,svg,canvas,table,[data-generated-visual-id],[data-source-evidence-id],[data-teaching-object]')]
+	        .filter(isVisible)
+	        .filter(el => {
+	          const box = el.getBoundingClientRect();
+	          const tagName = el.tagName.toUpperCase();
+	          if (box.width < 220 || box.height < 120 || (box.width * box.height) / (stageWidth * stageHeight) < 0.035) return false;
+	          if (tagName === 'IMG') return el.complete && el.naturalWidth > 0;
+	          if (tagName === 'SVG') return el.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse,text').length >= 3;
+	          if (tagName === 'TABLE') return el.querySelectorAll('td,th').length >= 4;
+	          if (tagName === 'CANVAS') return true;
+	          if (el.matches('[data-generated-visual-id],[data-source-evidence-id]')) return !!el.querySelector('img,svg,canvas,table');
+	          const kind = (el.getAttribute('data-teaching-object') || el.getAttribute('data-visual-kind') || '').toLowerCase();
+	          const structuredChildren = el.querySelectorAll('[data-diagram-label],.diagram-label,.callout,[data-step],[data-node],li,td,th').length;
+	          return /diagram|chart|formula|example|comparison|timeline|map|system|process|mechanism/.test(kind) && structuredChildren >= 3;
+	        });
+	      const validVisualRects = visualCandidates.map(clippedRect).filter(rect => rect.width > 0 && rect.height > 0);
+	      const sourceScreenshotElements = [...slide.querySelectorAll('[data-source-evidence-id] img,img[data-source-evidence-id],[data-source-screenshot],img')]
+	        .filter(isVisible)
+	        .filter(el => {
+	          if (el.tagName.toUpperCase() !== 'IMG') return el.hasAttribute('data-source-screenshot');
+	          const evidenceAncestor = el.closest('[data-source-evidence-id],[data-source-screenshot]');
+	          const cue = `${el.id} ${el.className || ''} ${el.getAttribute('alt') || ''} ${el.getAttribute('src') || ''}`.toLowerCase();
+	          return !!evidenceAncestor || /source|evidence|screenshot|crop|paper-page|原文|证据/.test(cue);
+	        });
+	      const sourceScreenshotRects = sourceScreenshotElements.map(clippedRect).filter(rect => rect.width > 0 && rect.height > 0);
+	      const brokenImages = [...slide.querySelectorAll('img')].filter(img => !img.complete || img.naturalWidth === 0).length;
       const images = [...slide.querySelectorAll('img')].map(img => {
         const box = img.getBoundingClientRect();
         return { width: Math.round(box.width), height: Math.round(box.height), naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight };
@@ -548,26 +1100,32 @@ const { pathToFileURL } = require('url');
       }
       const clippedContainers = [...slide.querySelectorAll('[data-bounds-check], [data-card], .card')]
         .filter(el => el.scrollWidth > el.clientWidth + 2 || el.scrollHeight > el.clientHeight + 2).length;
-      const teachingObjects = [...slide.querySelectorAll('[data-teaching-object], figure, table, svg, canvas, img')]
-        .filter(el => !el.closest('footer,.footnote,.citation'))
-        .map(el => {
-          const box = el.getBoundingClientRect();
-          return { width: box.width, height: box.height, areaRatio: (box.width * box.height) / (1920 * 1080) };
-        })
-        .filter(item => item.width >= 80 && item.height >= 50);
+	      const teachingObjects = validVisualRects.map(rect => ({ width: rect.width, height: rect.height, areaRatio: (rect.width * rect.height) / (stageWidth * stageHeight) }));
       const sourceEvidence = [...slide.querySelectorAll('[data-source-evidence-id]')].map(el => {
         const box = el.getBoundingClientRect();
         return { id: el.getAttribute('data-source-evidence-id'), width: Math.round(box.width), height: Math.round(box.height) };
       });
-      const layoutFingerprint = [...slide.querySelectorAll('h1,h2,h3,[data-information-group],[data-teaching-object],figure,table,img,svg')]
-        .filter(el => !el.closest('footer,.footnote,.citation'))
-        .map(el => {
-          const box = el.getBoundingClientRect();
-          return [box.left / 1920, box.top / 1080, box.width / 1920, box.height / 1080].map(value => Math.round(value * 20) / 20).join(',');
-        })
-        .filter((value, index, values) => value !== '0,0,0,0' && values.indexOf(value) === index)
-        .sort()
-        .join('|');
+	      const contentElements = [...slide.querySelectorAll('h1,h2,h3,p,li,blockquote,td,th,[data-information-group],.information-group,img,svg,canvas,table,[data-teaching-object]')]
+	        .filter(isVisible)
+	        .filter(el => !el.closest('footer,.footnote,.citation'));
+	      const contentRects = contentElements.map(clippedRect).filter(rect => rect.width >= 24 && rect.height >= 12 && rect.width * rect.height < stageWidth * stageHeight * 0.92);
+	      const layoutElements = [...slide.querySelectorAll('h1,h2,h3,[data-information-group],.information-group,img,svg,canvas,table,[data-teaching-object]')]
+	        .filter(isVisible)
+	        .filter(el => !el.closest('footer,.footnote,.citation'))
+	        .filter(el => {
+	          const box = el.getBoundingClientRect();
+	          return box.width * box.height >= stageWidth * stageHeight * 0.012 && box.width * box.height < stageWidth * stageHeight * 0.90;
+	        });
+	      const layoutTokens = new Set();
+	      layoutElements.forEach(el => {
+	        const box = clippedRect(el);
+	        const kind = el.matches('img,svg,canvas,[data-teaching-object]') ? 'visual' : el.matches('table') ? 'table' : el.matches('h1,h2,h3') ? 'heading' : 'group';
+	        const centerColumn = Math.min(5, Math.floor(((box.left + box.right) / 2) / stageWidth * 6));
+	        const centerRow = Math.min(3, Math.floor(((box.top + box.bottom) / 2) / stageHeight * 4));
+	        const widthBucket = Math.max(1, Math.min(4, Math.round(box.width / stageWidth * 4)));
+	        const heightBucket = Math.max(1, Math.min(4, Math.round(box.height / stageHeight * 4)));
+	        layoutTokens.add(`${kind}:${centerColumn}:${centerRow}:${widthBucket}:${heightBucket}`);
+	      });
       const expectedVisibleFields = Object.fromEntries(expectedVisibleIds.map(id => {
         const el = document.getElementById(id);
         if (!el || !slide.contains(el)) return [id, { present: false, visible: false, text: '' }];
@@ -593,17 +1151,25 @@ const { pathToFileURL } = require('url');
         nestedCards,
         textOverflow,
         textOverlap,
-        clippedContainers,
-        teachingObjectCount: teachingObjects.length,
-        teachingObjectAreaRatio: Math.min(1, teachingObjects.reduce((sum, item) => sum + item.areaRatio, 0)),
-        informationGroupCount: slide.querySelectorAll('[data-information-group], .information-group').length,
+	        clippedContainers,
+	        teachingObjectCount: teachingObjects.length,
+	        validVisualObjectCount: visualCandidates.length,
+	        sourceScreenshotObjectCount: sourceScreenshotElements.length,
+	        teachingObjectAreaRatio: gridCoverage(validVisualRects),
+	        validVisualAreaRatio: gridCoverage(validVisualRects),
+	        sourceScreenshotAreaRatio: gridCoverage(sourceScreenshotRects),
+	        contentAreaRatio: gridCoverage(contentRects),
+	        lowerHalfContentRatio: gridCoverage(contentRects, stageHeight / 2),
+	        contentBottomRatio: contentRects.length ? Math.max(...contentRects.map(rect => rect.bottom)) / stageHeight : 0,
+	        informationGroupCount: slide.querySelectorAll('[data-information-group], .information-group').length,
         diagramLabelCount: slide.querySelectorAll('[data-diagram-label], .diagram-label, .callout').length,
         visibleClaimIds: [...slide.querySelectorAll('[data-claim-id]')]
           .filter(el => { const style = getComputedStyle(el); const box = el.getBoundingClientRect(); return style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0; })
           .map(el => el.getAttribute('data-claim-id')),
         sourceEvidence,
-        layoutFingerprint,
-        expectedVisibleFields
+	        layoutTokens: [...layoutTokens].sort(),
+	        layoutObjectCount: layoutElements.length,
+	        expectedVisibleFields
       };
     }, expectedVisibleIds);
     const screenshot = path.join(outputDir, `slide-${String(index + 1).padStart(2, '0')}.png`);
@@ -717,6 +1283,17 @@ def main() -> int:
             for field in ("complexity_score", "score_breakdown", "target_min", "target_max", "maximum_count", "resolved_count", "rationale"):
                 if sizing.get(field) in (None, "", []):
                     errors.append(f"Automatic sizing is missing {field}.")
+            breakdown = sizing.get("score_breakdown", {})
+            if isinstance(breakdown, dict):
+                recomputed_score = sum(value for value in breakdown.values() if isinstance(value, (int, float)))
+                if sizing.get("complexity_score") != recomputed_score:
+                    errors.append(f"Automatic sizing complexity_score does not equal score_breakdown sum: {sizing.get('complexity_score')}/{recomputed_score}.")
+                expected_mode = "concise" if recomputed_score <= 7 else "medium" if recomputed_score <= 15 else "detailed"
+                if size_mode != expected_mode:
+                    errors.append(f"Automatic sizing resolves to {expected_mode} for score {recomputed_score}, not {size_mode}.")
+                expected_range = {"concise": (6, 10), "medium": (11, 20), "detailed": (21, 36)}[expected_mode]
+                if (sizing.get("target_min"), sizing.get("target_max")) != expected_range:
+                    errors.append(f"Automatic sizing target range must be {expected_range[0]}-{expected_range[1]} for {expected_mode} mode.")
         expected_slides = manifest.get("slides_expected")
         rendered_slides = manifest.get("slides_rendered")
         slide_items = manifest.get("slides", [])
@@ -963,7 +1540,7 @@ def main() -> int:
                             errors.append(f"Worked-example slide {slide.get('id')} is missing {field}.")
                     if isinstance(method_stage_count, int) and len(example.get("stages", [])) < method_stage_count:
                         errors.append(f"Worked-example slide {slide.get('id')} does not cover the full method pipeline.")
-            for field in ("presentation_intent", "communication_job", "reasoning_role", "standalone_takeaway", "reader_context", "so_what", "density_class", "scan_order", "text_character_count", "information_group_count", "visual_route"):
+            for field in ("presentation_intent", "communication_job", "reasoning_role", "standalone_takeaway", "reader_context", "so_what", "density_class", "scan_order", "information_group_count", "visual_route"):
                 if slide.get("type") not in {"title", "evidence-appendix"} and slide.get(field) in (None, "", []):
                     errors.append(f"Present-and-read slide {slide.get('id')} is missing {field}.")
             if slide.get("type") not in {"title", "evidence-appendix"} and slide.get("presentation_intent") != "present-and-read":
@@ -978,9 +1555,6 @@ def main() -> int:
                     errors.append(f"Slide {slide.get('id')} information_group_count does not match information_groups.")
                 if slide.get("visual_route") not in {"generated", "image-to-image", "deterministic", "source-crop", "mixed"}:
                     errors.append(f"Slide {slide.get('id')} has invalid visual_route.")
-                minimum_chars = 450 if slide.get("reasoning_role") in {"evidence", "comparison"} else 350
-                if slide.get("density_class") != "low" and slide.get("text_character_count", 0) < minimum_chars and not slide.get("density_visual_equivalence_reason"):
-                    errors.append(f"Slide {slide.get('id')} records only {slide.get('text_character_count', 0)} text characters without a visual-equivalence reason; expected about {minimum_chars}+ for this role.")
                 visible_fields = (
                     ("communication_job", "communication_job_dom_id"),
                     ("standalone_takeaway", "standalone_takeaway_dom_id"),
@@ -1018,7 +1592,7 @@ def main() -> int:
             if dominant_count / content_slide_count > 0.60 and not manifest.get("layout_repetition_rationale"):
                 errors.append(f"One layout family dominates {dominant_count}/{content_slide_count} teaching slides without rationale: {dominant_family}")
             if content_slide_count >= 10 and len(layout_counts) < 4:
-                errors.append(f"Medium/detailed deck needs at least four composition families: {len(layout_counts)}.")
+                warnings.append(f"Manifest declares fewer than four composition families ({len(layout_counts)}); rendered geometry is authoritative.")
         content_layout_sequence = [
             str(slide.get("layout_family", ""))
             for slide in slide_items
@@ -1028,8 +1602,8 @@ def main() -> int:
         for index in range(1, len(content_layout_sequence)):
             if content_layout_sequence[index] == content_layout_sequence[index - 1]:
                 streak += 1
-                if streak > 3:
-                    errors.append(f"The same slide composition repeats more than three times consecutively near teaching slide {index + 1}: {content_layout_sequence[index]}")
+                if streak > 2:
+                    warnings.append(f"Manifest repeats the same slide composition more than twice near teaching slide {index + 1}: {content_layout_sequence[index]}; rendered geometry is authoritative.")
                     break
             else:
                 streak = 1
@@ -1104,6 +1678,8 @@ def main() -> int:
             if asset.suffix.lower() not in BITMAP_SUFFIXES or not asset.exists():
                 errors.append(f"Generated visual is not a real local bitmap: {rel}")
             else:
+                for issue in validate_generated_asset_provenance(item, asset, root):
+                    errors.append(f"Generated visual provenance failed for {rel}: {issue}")
                 actual_hash = sha256(asset)
                 declared_hash = str(item.get("asset_sha256", "")).replace("sha256:", "")
                 if not declared_hash:
@@ -1215,9 +1791,12 @@ def main() -> int:
                 errors.append(f"Generated visual is displayed too small to be a primary teaching object: {rel}")
 
         source = manifest.get("source_fidelity", {})
-        for field in ("source_pdf_sha256", "page_count"):
-            if not source.get(field):
-                errors.append(f"Source fidelity is missing {field}.")
+        source_hash = source.get("source_sha256") or source.get("source_pdf_sha256")
+        source_format = str(source.get("source_format") or "").lower()
+        if not source_hash:
+            errors.append("Source fidelity is missing source_sha256/source_pdf_sha256.")
+        if source_format == "pdf" and not source.get("page_count"):
+            errors.append("PDF source fidelity is missing page_count.")
         if not manifest.get("source_title"):
             errors.append("Deck manifest is missing source_title.")
         if args.source:
@@ -1226,7 +1805,7 @@ def main() -> int:
                 errors.append(f"Requested source does not exist: {requested_source}")
             else:
                 requested_hash = sha256(requested_source)
-                if normalized_hash(source.get("source_pdf_sha256")) != requested_hash:
+                if normalized_hash(source_hash) != requested_hash:
                     errors.append("P0 source identity mismatch: deck manifest does not belong to the requested source file.")
                 if requested_source.suffix.lower() == ".pdf":
                     pdfinfo = command_path("pdfinfo")
@@ -1247,9 +1826,9 @@ def main() -> int:
             else:
                 try:
                     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-                    if normalized_hash(inventory.get("source_sha256")) != normalized_hash(source.get("source_pdf_sha256")):
-                        errors.append("Source inventory hash does not match manifest source_pdf_sha256.")
-                    if inventory.get("page_count") != source.get("page_count"):
+                    if normalized_hash(inventory.get("source_sha256")) != normalized_hash(source_hash):
+                        errors.append("Source inventory hash does not match manifest source hash.")
+                    if source_format == "pdf" and inventory.get("page_count") != source.get("page_count"):
                         errors.append("Source inventory page_count does not match manifest source fidelity.")
                     if str(inventory.get("source_title", "")).strip() != str(manifest.get("source_title", "")).strip():
                         errors.append("Source inventory title does not match manifest source_title.")
@@ -1477,8 +2056,10 @@ def main() -> int:
                 pptx_path = root / str(pptx_rel)
                 if not pptx_path.exists() or pptx_path.stat().st_size < 1024 or pptx_path.read_bytes()[:2] != b"PK":
                     errors.append("Editable PPTX export is missing, suspiciously small, or invalid.")
-                elif normalized_hash(exports.get("pptx_sha256")) != sha256(pptx_path):
-                    errors.append("Final PPTX hash is missing or does not match the exported file.")
+                else:
+                    errors.extend(validate_pptx_editability(pptx_path, len(slide_items), slide_items, visuals))
+                    if normalized_hash(exports.get("pptx_sha256")) != sha256(pptx_path):
+                        errors.append("Final PPTX hash is missing or does not match the exported file.")
             pdf_rel = exports.get("pdf_path")
             if not pdf_rel:
                 errors.append("Final presentation PDF export is missing.")
@@ -1551,7 +2132,7 @@ def main() -> int:
                 errors.append("Browser-rendered slide count does not match static slide count.")
             visible_claim_ids: set[str] = set()
             rendered_source_evidence: dict[str, dict] = {}
-            rendered_layout_sequence: list[str] = []
+            rendered_results: list[dict] = []
             for result in probe.get("results", []):
                 index = result.get("index")
                 slide_item = slide_items[index - 1] if isinstance(index, int) and 0 < index <= len(slide_items) else {}
@@ -1561,8 +2142,9 @@ def main() -> int:
                 for evidence in result.get("sourceEvidence", []):
                     if evidence.get("id"):
                         rendered_source_evidence[str(evidence.get("id"))] = evidence
-                if slide_type not in {"title", "divider", "recap", "evidence-appendix"}:
-                    rendered_layout_sequence.append(str(result.get("layoutFingerprint", "")))
+                screenshot_path = Path(str(result.get("screenshot", "")))
+                result["pixelMetrics"] = pixel_content_metrics(screenshot_path) if screenshot_path.exists() else None
+                rendered_results.append(result)
                 if result.get("brokenImages"):
                     errors.append(f"Slide {index} has broken images in browser rendering.")
                 if result.get("scrollWidth", 0) > result.get("clientWidth", 0) + 2 or result.get("scrollHeight", 0) > result.get("clientHeight", 0) + 2:
@@ -1598,15 +2180,8 @@ def main() -> int:
                 if slide_type not in {"title", "divider", "evidence-appendix"}:
                     if result.get("informationGroupCount", 0) < 3:
                         errors.append(f"Slide {index} does not expose at least three visible data-information-group teaching groups.")
-                    if result.get("teachingObjectCount", 0) == 0:
-                        errors.append(f"Slide {index} has no substantial teaching object; long prose alone does not satisfy reading-first mode.")
-                    role = str(slide_item.get("reasoning_role", ""))
-                    minimum_chars = 450 if role in {"evidence", "comparison"} else 350
-                    if density_class != "low" and result.get("textChars", 0) < minimum_chars and result.get("teachingObjectAreaRatio", 0) < 0.35:
-                        errors.append(
-                            f"Slide {index} is under-taught: only {result.get('textChars', 0)} visible characters and "
-                            f"{result.get('teachingObjectAreaRatio', 0):.2f} teaching-object area ratio."
-                        )
+                    if result.get("contentAreaRatio", 0) < 0.38 and result.get("informationGroupCount", 0) < 3:
+                        errors.append(f"Slide {index} lacks both canvas utilization and a complete visible teaching structure.")
             expected_visible_claim_ids = {
                 str(claim.get("claim_id"))
                 for claim in manifest.get("claim_evidence_map", [])
@@ -1626,15 +2201,7 @@ def main() -> int:
             for evidence_id, rendered in rendered_source_evidence.items():
                 if evidence_id in expected_source_evidence and (rendered.get("width", 0) < 900 or rendered.get("height", 0) < 300):
                     errors.append(f"Rendered source evidence {evidence_id} is too small: {rendered.get('width')}x{rendered.get('height')}.")
-            layout_streak = 1
-            for index in range(1, len(rendered_layout_sequence)):
-                if rendered_layout_sequence[index] and rendered_layout_sequence[index] == rendered_layout_sequence[index - 1]:
-                    layout_streak += 1
-                    if layout_streak > 3:
-                        errors.append("Rendered geometry repeats the same slide composition more than three times consecutively.")
-                        break
-                else:
-                    layout_streak = 1
+            errors.extend(audit_rendered_design(rendered_results, slide_items))
 
     if args.strict:
         errors.extend(warnings)
