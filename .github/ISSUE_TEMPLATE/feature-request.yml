@@ -1,0 +1,31 @@
+name: 功能建议 / Feature request
+description: 提出新的来源类型、输出能力或质量改进建议
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题 / Problem
+      description: 请先描述使用场景和困难，而不只是功能名称。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案 / Proposed improvement
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 主要影响的模式 / Primary mode
+      options:
+        - 全部 / All
+        - 学习图册 / Learning album
+        - PPT
+        - HTML 互动阅读器 / Interactive reader
+        - 安装与分发 / Installation and distribution
+    validations:
+      required: true

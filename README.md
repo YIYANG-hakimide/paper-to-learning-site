@@ -6,8 +6,23 @@
 [![Codex Skill](https://img.shields.io/badge/Codex-Skill-171717)](./SKILL.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-b7482a)](./LICENSE)
 [![GitHub Pages](https://img.shields.io/badge/preview-GitHub%20Pages-d7a928)](https://yiyang-hakimide.github.io/paper-and-book-to-visual-learning/)
+[![GitHub Stars](https://img.shields.io/github/stars/YIYANG-hakimide/paper-and-book-to-visual-learning?style=flat&color=c88b2b)](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/stargazers)
 
 **Paper and Book to Visual Learning** 面向需要真正读懂长文本的人。它把论文、完整书籍、选定章节、文章、白皮书、研究报告和手册，整理成有清晰学习路径的视觉成品，同时保留关键概念、论证、证据与边界。
+
+论文可视化、书籍学习图册、研究型 PPT 和双语互动阅读器，都由同一套教学逻辑生成。
+
+| 学习图册 | 互动阅读器 |
+| --- | --- |
+| [![论文学习图册预览](docs/assets/examples/paper-intervention-results.jpg)](docs/assets/examples/paper-intervention-results.jpg) | [![互动 HTML 阅读器预览](docs/assets/examples/html-agentopia-reward-reader.jpg)](docs/assets/examples/html-agentopia-reward-reader.jpg) |
+
+在 Codex 中直接说：
+
+```text
+安装这个 Skill：https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning
+```
+
+[查看完整样张](https://yiyang-hakimide.github.io/paper-and-book-to-visual-learning/#examples-zh) · [提交想要视觉化的材料](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=example-request.yml) · [报告问题](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=bug-report.yml)
 
 ## 三种模式
 
@@ -21,37 +36,56 @@
 
 |  |  |
 | --- | --- |
-| [![论文转学习图册样张一](assets/examples/paper-residual-stream.jpg)](assets/examples/paper-residual-stream.jpg) | [![论文转学习图册样张二](assets/examples/paper-intervention-results.jpg)](assets/examples/paper-intervention-results.jpg) |
+| [![论文转学习图册样张一](docs/assets/examples/paper-residual-stream.jpg)](docs/assets/examples/paper-residual-stream.jpg) | [![论文转学习图册样张二](docs/assets/examples/paper-intervention-results.jpg)](docs/assets/examples/paper-intervention-results.jpg) |
 
 ### 书籍转学习图册样张
 
 |  |  |
 | --- | --- |
-| [![书籍转学习图册样张一](assets/examples/book-resilience.jpg)](assets/examples/book-resilience.jpg) | [![书籍转学习图册样张二](assets/examples/book-sleep-recovery.jpg)](assets/examples/book-sleep-recovery.jpg) |
+| [![书籍转学习图册样张一](docs/assets/examples/book-resilience.jpg)](docs/assets/examples/book-resilience.jpg) | [![书籍转学习图册样张二](docs/assets/examples/book-sleep-recovery.jpg)](docs/assets/examples/book-sleep-recovery.jpg) |
 
 ### 生成 HTML 样张
 
 |  |  |
 | --- | --- |
-| [![生成 HTML 样张一](assets/examples/html-agentopia-figure-atlas.jpg)](assets/examples/html-agentopia-figure-atlas.jpg) | [![生成 HTML 样张二](assets/examples/html-agentopia-reward-reader.jpg)](assets/examples/html-agentopia-reward-reader.jpg) |
+| [![生成 HTML 样张一](docs/assets/examples/html-agentopia-figure-atlas.jpg)](docs/assets/examples/html-agentopia-figure-atlas.jpg) | [![生成 HTML 样张二](docs/assets/examples/html-agentopia-reward-reader.jpg)](docs/assets/examples/html-agentopia-reward-reader.jpg) |
 
 ### 生成 PPT 样张
 
 |  |  |
 | --- | --- |
-| [![生成 PPT 样张一](assets/examples/ppt-agentopia-training.jpg)](assets/examples/ppt-agentopia-training.jpg) | [![生成 PPT 样张二](assets/examples/ppt-agentopia-argument-map.jpg)](assets/examples/ppt-agentopia-argument-map.jpg) |
+| [![生成 PPT 样张一](docs/assets/examples/ppt-agentopia-training.jpg)](docs/assets/examples/ppt-agentopia-training.jpg) | [![生成 PPT 样张二](docs/assets/examples/ppt-agentopia-argument-map.jpg)](docs/assets/examples/ppt-agentopia-argument-map.jpg) |
 
 ### 竖版视觉图样张
 
 <p align="center">
-  <a href="assets/examples/visual-courage-reading-map-portrait.jpg"><img src="assets/examples/visual-courage-reading-map-portrait.jpg" alt="竖版视觉图样张" width="560"></a>
+  <a href="docs/assets/examples/visual-courage-reading-map-portrait.jpg"><img src="docs/assets/examples/visual-courage-reading-map-portrait.jpg" alt="竖版视觉图样张" width="560"></a>
 </p>
 
-[查看完整《被讨厌的勇气》视觉学习图集 PDF](docs/assets/examples/courage-visual-learning-album.pdf)
+[查看完整《被讨厌的勇气》视觉学习图集 PDF](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/releases/download/v0.2.3/courage-visual-learning-album.pdf)
+
+如果这个项目帮助你读懂了一篇材料，可以点一个 Star，让更多需要它的人更容易找到它。
 
 ## 安装与更新
 
-推荐在 Codex 中使用：
+推荐直接让 Codex 安装：
+
+```text
+安装这个 Skill：https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning
+```
+
+也可以使用 Codex 自带的 Skill 安装器：
+
+```bash
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
+  --repo YIYANG-hakimide/paper-and-book-to-visual-learning \
+  --path . \
+  --name paper-and-book-to-visual-learning
+```
+
+安装完成后，Skill 会从下一轮任务开始可用。
+
+或使用 Git：
 
 ```bash
 git clone https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning.git \
@@ -93,11 +127,20 @@ git -C ~/.codex/skills/paper-and-book-to-visual-learning pull --ff-only
 - 手册、教程和其他结构化长文本
 - 本地 PDF、文档或可访问的网页来源
 
+## 参与改进
+
+- [提交案例需求](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=example-request.yml)
+- [报告运行或输出问题](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=bug-report.yml)
+- [提出功能建议](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=feature-request.yml)
+- [查看贡献说明](.github/CONTRIBUTING.md)
+
 ## English
 
 > Turn papers, books, articles, and other long-form sources into visual products that are easier to understand and see clearly.
 
 **Paper and Book to Visual Learning** is for readers who want to understand a source rather than skim a summary. It transforms papers, full books, selected chapters, articles, white papers, reports, and manuals into guided visual outputs while preserving the concepts, argument, evidence, and boundaries that matter.
+
+It supports paper visualization, book learning albums, research presentations, and bilingual interactive readers through one shared teaching workflow.
 
 ## Three Modes
 
@@ -111,7 +154,24 @@ The previews above cover learning albums, an interactive HTML reader, an editabl
 
 ## Install And Update
 
-Recommended for Codex:
+Recommended: ask Codex to install it directly:
+
+```text
+Install this Skill: https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning
+```
+
+You can also use Codex's built-in Skill installer:
+
+```bash
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
+  --repo YIYANG-hakimide/paper-and-book-to-visual-learning \
+  --path . \
+  --name paper-and-book-to-visual-learning
+```
+
+The Skill is available from the next task after installation.
+
+Or use Git:
 
 ```bash
 git clone https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning.git \
@@ -152,6 +212,13 @@ Image albums and visual presentations require an available image-generation capa
 - Full books, selected chapters, and long-form articles
 - Manuals, tutorials, and other structured long-form texts
 - Local PDFs, documents, or accessible web sources
+
+## Contribute
+
+- [Request a source example](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=example-request.yml)
+- [Report a problem](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=bug-report.yml)
+- [Suggest an improvement](https://github.com/YIYANG-hakimide/paper-and-book-to-visual-learning/issues/new?template=feature-request.yml)
+- [Read the contribution guide](.github/CONTRIBUTING.md)
 
 ## License
 

@@ -1,0 +1,42 @@
+name: 案例征集 / Example request
+description: 提交一篇希望被转成学习图册、PPT 或 HTML 的公开材料
+title: "[Example] "
+labels:
+  - example-request
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请勿上传私密、付费或无权公开的材料。公开链接优先。
+  - type: input
+    id: source
+    attributes:
+      label: 材料链接 / Source link
+      placeholder: https://...
+    validations:
+      required: true
+  - type: dropdown
+    id: output
+    attributes:
+      label: 希望看到的输出 / Preferred output
+      options:
+        - 学习图册 / Learning album
+        - PPT
+        - HTML 互动阅读器 / Interactive reader
+        - 由项目判断 / Let the project decide
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: 为什么值得做 / Why this source
+      description: 哪些内容难懂，或者你最想看清楚什么？
+    validations:
+      required: true
+  - type: checkboxes
+    id: rights
+    attributes:
+      label: 公开与授权确认 / Public-source confirmation
+      options:
+        - label: 该材料可公开访问，且提交链接不会泄露个人或机构隐私。
+          required: true
