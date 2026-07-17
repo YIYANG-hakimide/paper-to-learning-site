@@ -337,7 +337,7 @@ nav a:hover {
 }
 
 .examples {
-  margin-bottom: 150px;
+  margin-bottom: 112px;
 }
 
 .examples-heading {
@@ -353,12 +353,12 @@ nav a:hover {
 
 .example-groups {
   display: grid;
-  gap: 84px;
+  gap: 52px;
 }
 
 .example-group h4 {
-  margin: 0 0 22px;
-  padding-top: 18px;
+  margin: 0 0 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--ink);
   font-family: var(--serif);
   font-size: clamp(24px, 3vw, 38px);
@@ -386,6 +386,27 @@ nav a:hover {
   width: 100%;
   height: auto;
   object-fit: contain;
+}
+
+.portrait-example-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 620px) minmax(0, 1fr);
+}
+
+.portrait-example-group h4,
+.portrait-example-group .example-links {
+  grid-column: 1 / -1;
+}
+
+.example-portrait {
+  grid-column: 2;
+}
+
+.example-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin-top: 24px;
 }
 
 .use-section {
@@ -622,7 +643,7 @@ footer div {
   }
 
   .example-groups {
-    gap: 58px;
+    gap: 36px;
   }
 
   .example-group h4 {
@@ -632,6 +653,22 @@ footer div {
 
   .example-pair {
     gap: 8px;
+  }
+
+  .portrait-example-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .example-portrait {
+    grid-column: 1;
+    width: min(100%, 620px);
+    justify-self: center;
+  }
+
+  .example-links {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
   }
 
   .use-section {

@@ -12,8 +12,8 @@
 ## 三种模式
 
 - **图片（个人学习图册）**：把难点拆成连续、可独立阅读的讲解图，适合自学、复习与分享。可同时整理为按页浏览的 PDF 图册。
-- **PPT（对外讲述，默认 PDF + 可编辑 PPTX）**：为汇报、教学和讨论组织完整叙事，让现场演示与会后阅读都能成立。**示例准备中。**
-- **HTML（互动阅读器）**：把原文、中文导读、术语、图表和证据组织成可探索的阅读体验。**示例准备中。**
+- **PPT（对外讲述，默认 PDF + 可编辑 PPTX）**：为汇报、教学和讨论组织完整叙事，让现场演示与会后阅读都能成立。
+- **HTML（互动阅读器）**：把原文、中文导读、术语、图表和证据组织成可探索的阅读体验。
 
 ## 真实样例
 
@@ -28,6 +28,26 @@
 |  |  |
 | --- | --- |
 | [![书籍转学习图册样张一](assets/examples/book-resilience.jpg)](assets/examples/book-resilience.jpg) | [![书籍转学习图册样张二](assets/examples/book-sleep-recovery.jpg)](assets/examples/book-sleep-recovery.jpg) |
+
+### 生成 HTML 样张
+
+|  |  |
+| --- | --- |
+| [![生成 HTML 样张一](assets/examples/html-agentopia-figure-atlas.jpg)](assets/examples/html-agentopia-figure-atlas.jpg) | [![生成 HTML 样张二](assets/examples/html-agentopia-reward-reader.jpg)](assets/examples/html-agentopia-reward-reader.jpg) |
+
+### 生成 PPT 样张
+
+|  |  |
+| --- | --- |
+| [![生成 PPT 样张一](assets/examples/ppt-agentopia-training.jpg)](assets/examples/ppt-agentopia-training.jpg) | [![生成 PPT 样张二](assets/examples/ppt-agentopia-argument-map.jpg)](assets/examples/ppt-agentopia-argument-map.jpg) |
+
+### 竖版视觉图样张
+
+<p align="center">
+  <a href="assets/examples/visual-courage-reading-map-portrait.jpg"><img src="assets/examples/visual-courage-reading-map-portrait.jpg" alt="竖版视觉图样张" width="560"></a>
+</p>
+
+[查看完整《被讨厌的勇气》视觉学习图集 PDF](docs/assets/examples/courage-visual-learning-album.pdf)
 
 ## 安装与更新
 
@@ -82,12 +102,12 @@ git -C ~/.codex/skills/paper-and-book-to-visual-learning pull --ff-only
 ## Three Modes
 
 - **Images (personal learning album)**: A coherent sequence of standalone teaching visuals for self-study, review, and sharing, with an optional page-matched PDF album.
-- **PPT (present to others, PDF + editable PPTX by default)**: A complete narrative for presentations, teaching, and discussion that also remains useful when read afterward. **Examples coming soon.**
-- **HTML (interactive reader)**: An explorable reading experience connecting source passages, guided explanations, terms, figures, and evidence. **Examples coming soon.**
+- **PPT (present to others, PDF + editable PPTX by default)**: A complete narrative for presentations, teaching, and discussion that also remains useful when read afterward.
+- **HTML (interactive reader)**: An explorable reading experience connecting source passages, guided explanations, terms, figures, and evidence.
 
 ## Examples
 
-The four previews above show two different kinds of work: paper-focused mechanism and experiment explanation, and book-focused concept and action synthesis. Select any image to open the full-size preview.
+The previews above cover learning albums, an interactive HTML reader, an editable presentation, and a portrait visual map. Select an image to open the full-size preview. A complete PDF album is linked below the previews.
 
 ## Install And Update
 
